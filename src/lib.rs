@@ -11,8 +11,9 @@ pub mod pica_window {
             Threading::{ConvertThreadToFiber, CreateFiber},
         },
         UI::WindowsAndMessaging::{
-            AdjustWindowRect, CreateWindowExW, LoadCursorW, RegisterClassW, CS_HREDRAW, CS_VREDRAW,
-            CW_USEDEFAULT, IDC_CROSS, WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
+            AdjustWindowRect, CreateWindowExW, LoadCursorW, RegisterClassW, SetWindowLongPtrW,
+            CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, WNDCLASSW,
+            WS_OVERLAPPEDWINDOW, WS_VISIBLE,
         },
     };
 
@@ -147,6 +148,11 @@ pub mod pica_window {
             };
             // Note Geert: Unsure if I can get a valid device context here, or shouild wait after showing the window?
             let win32_device_context = unsafe { GetDC(win32_window_handle) };
+            if win32_device_context == 0 {
+                return Err(Error::Window(
+                    "Failed to get Device Context during window creation.".to_owned(),
+                ));
+            }
 
             let mut pica_window = Self {
                 window_attributes,
@@ -158,24 +164,45 @@ pub mod pica_window {
                 },
             };
 
-            // TODO Geert: initialize message fiber
-            // TODO Geert: SetWindowLongPtr()
+            pica_window.win32.message_fiber = unsafe {
+                CreateFiber(
+                    0,
+                    Some(Self::message_fiber_proc),
+                    &mut pica_window as *const _ as *const c_void,
+                )
+            };
+            assert!(!pica_window.win32.message_fiber.is_null());
+
+            unsafe {
+                SetWindowLongPtrW(
+                    pica_window.win32.win32_window_handle,
+                    GWLP_USERDATA,
+                    (&mut pica_window) as *mut Self as isize,
+                )
+            };
+
             Ok(pica_window)
-
         }
 
-        pub fn run(&mut self) {
-            // Create message fiber
-            todo!()
-        }
-
+        // Win32 message handling 
         extern "system" fn wndproc(
             window_handle: HWND,
             message: u32,
             wparam: WPARAM,
             lparam: LPARAM,
         ) -> LRESULT {
-            unsafe { todo!() }
+            unsafe { 
+                // TODO Geert: Implement win32 message handling.
+                todo!() }
+        }
+
+        // Win32 message loop
+        extern "system" fn message_fiber_proc(data: *mut c_void) {
+            
+            // data is actually a pointer to our initialized pica_window::Window struct
+            let pica_window: *mut Self = unsafe{std::mem::transmute(data)};
+
+            // TODO Geert: Implement the win32 message loop
         }
     }
 }
