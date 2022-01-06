@@ -13,7 +13,7 @@ pub mod pica_window {
         UI::WindowsAndMessaging::{
             AdjustWindowRect, CreateWindowExW, LoadCursorW, RegisterClassW, SetWindowLongPtrW,
             CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, WNDCLASSW,
-            WS_OVERLAPPEDWINDOW, WS_VISIBLE,
+            WS_OVERLAPPEDWINDOW, WS_VISIBLE, GetWindowLongPtrW, DefWindowProcW,
         },
     };
 
@@ -164,6 +164,14 @@ pub mod pica_window {
                 },
             };
 
+            unsafe {
+                SetWindowLongPtrW(
+                    pica_window.win32.win32_window_handle,
+                    GWLP_USERDATA,
+                    (&mut pica_window) as *mut Self as isize,
+                )
+            };
+
             pica_window.win32.message_fiber = unsafe {
                 CreateFiber(
                     0,
@@ -173,35 +181,35 @@ pub mod pica_window {
             };
             assert!(!pica_window.win32.message_fiber.is_null());
 
-            unsafe {
-                SetWindowLongPtrW(
-                    pica_window.win32.win32_window_handle,
-                    GWLP_USERDATA,
-                    (&mut pica_window) as *mut Self as isize,
-                )
-            };
-
             Ok(pica_window)
         }
 
-        // Win32 message handling 
+        // Win32 message handling
         extern "system" fn wndproc(
             window_handle: HWND,
             message: u32,
             wparam: WPARAM,
             lparam: LPARAM,
         ) -> LRESULT {
-            unsafe { 
+            unsafe {
+                println!("wndproc: {}",  GetWindowLongPtrW(window_handle, GWLP_USERDATA));
+                let pica_window = GetWindowLongPtrW(window_handle, GWLP_USERDATA) as *mut Self;
+                if !pica_window.is_null() {
+                    println!("HURRAAI!");
+                }
+
                 // TODO Geert: Implement win32 message handling.
-                todo!() }
+                // DefWindowProcW(window_handle, message, wparam, lparam)
+                0
+                
+            }
         }
 
         // Win32 message loop
         extern "system" fn message_fiber_proc(data: *mut c_void) {
-            
             // data is actually a pointer to our initialized pica_window::Window struct
-            let pica_window: *mut Self = unsafe{std::mem::transmute(data)};
-
+            let pica_window: *mut Self = unsafe { std::mem::transmute(data) };
+            assert!(!pica_window.is_null());
             // TODO Geert: Implement the win32 message loop
         }
     }
@@ -212,7 +220,7 @@ pub mod error {
 
     #[derive(Debug)]
     pub enum Error {
-        /// WIN32 Error
+        /// Win32 Error
         Win32Error(Win32Error),
         Window(String),
     }
