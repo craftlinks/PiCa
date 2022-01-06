@@ -5,13 +5,14 @@ pub mod pica_window {
     use std::ffi::c_void;
     use windows::Win32::{
         Foundation::{HWND, LPARAM, LRESULT, PWSTR, RECT, WPARAM},
+        Graphics::Gdi::GetDC,
         System::{
             LibraryLoader::GetModuleHandleW,
             Threading::{ConvertThreadToFiber, CreateFiber},
         },
         UI::WindowsAndMessaging::{
             AdjustWindowRect, CreateWindowExW, LoadCursorW, RegisterClassW, CS_HREDRAW, CS_VREDRAW,
-            CW_USEDEFAULT, IDC_CROSS, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+            CW_USEDEFAULT, IDC_CROSS, WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
         },
     };
 
@@ -55,7 +56,7 @@ pub mod pica_window {
         }
     }
 
-    pub struct Win32 {
+    struct Win32 {
         win32_window_handle: isize,
         win32_device_context: isize,
         main_fiber: *mut c_void,
@@ -82,7 +83,7 @@ pub mod pica_window {
             // Calculates the required size of the window rectangle, based on the desired client-rectangle size.
             // Returns default values when calculation fails.
             let window_size: (i32, i32) = if window_attributes.size != (0, 0) {
-                let window_rectangle = RECT {
+                let mut window_rectangle = RECT {
                     left: 0,
                     top: 0,
                     right: window_attributes.size.1,
@@ -101,12 +102,19 @@ pub mod pica_window {
                 (CW_USEDEFAULT, CW_USEDEFAULT)
             };
 
+            let window_position: (i32, i32) = match window_attributes.position {
+                (0, 0) => (CW_USEDEFAULT, CW_USEDEFAULT),
+                _ => window_attributes.position,
+            };
+
+            let instance = unsafe { GetModuleHandleW(None) };
+
             let window_class = {
                 unsafe {
                     WNDCLASSW {
                         hCursor: LoadCursorW(None, IDC_CROSS),
-                        hInstance: GetModuleHandleW(None),
-                        lpszClassName: PWSTR("pica".to_wide().as_ptr() as *mut u16),
+                        hInstance: instance,
+                        lpszClassName: PWSTR("pica".to_wide()),
 
                         style: CS_HREDRAW | CS_VREDRAW,
                         lpfnWndProc: Some(Self::wndproc),
@@ -121,8 +129,39 @@ pub mod pica_window {
                 ));
             }
 
-            // TODO: Geert CreateWindow function
-            unsafe { CreateWindowExW() };
+            let win32_window_handle = unsafe {
+                CreateWindowExW(
+                    Default::default(),
+                    PWSTR("pica".to_wide()),
+                    PWSTR((&window_attributes.title[..]).to_wide()),
+                    WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                    window_position.0,
+                    window_position.1,
+                    window_size.0,
+                    window_size.1,
+                    None,
+                    None,
+                    instance,
+                    0 as *const c_void,
+                )
+            };
+            // Note Geert: Unsure if I can get a valid device context here, or shouild wait after showing the window?
+            let win32_device_context = unsafe { GetDC(win32_window_handle) };
+
+            let mut pica_window = Self {
+                window_attributes,
+                win32: Win32 {
+                    win32_window_handle,
+                    win32_device_context,
+                    main_fiber,
+                    message_fiber: 0 as *mut c_void,
+                },
+            };
+
+            // TODO Geert: initialize message fiber
+            // TODO Geert: SetWindowLongPtr()
+            Ok(pica_window)
+
         }
 
         pub fn run(&mut self) {
@@ -144,6 +183,7 @@ pub mod pica_window {
 pub mod error {
     use std::{error, fmt};
 
+    #[derive(Debug)]
     pub enum Error {
         /// WIN32 Error
         Win32Error(Win32Error),
@@ -191,14 +231,14 @@ pub mod error {
 pub mod utils {
     /// Utility to convert Rust `&str` into wide UTF-16 string.
     pub trait ToWide {
-        fn to_wide(&self) -> Vec<u16>;
+        fn to_wide(&self) -> *mut u16;
     }
 
     impl ToWide for &str {
-        fn to_wide(&self) -> Vec<u16> {
+        fn to_wide(&self) -> *mut u16 {
             let mut result: Vec<u16> = self.encode_utf16().collect();
             result.push(0);
-            result
+            result.as_ptr() as *mut u16
         }
     }
 }
