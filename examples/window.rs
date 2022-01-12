@@ -8,6 +8,8 @@ pub fn main() -> Result<(),Error> {
         .with_size(800, 600);
 
     let mut window = Window::new_with_attributes(window_attributes)?;
-    println!("created window");
+    loop {
+        window.window_pull()
+    }
     Ok(())
 }

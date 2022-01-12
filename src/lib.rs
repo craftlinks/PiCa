@@ -4,16 +4,18 @@ pub mod pica_window {
     use crate::utils::*;
     use std::ffi::c_void;
     use windows::Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, PWSTR, RECT, WPARAM},
+        Foundation::{GetLastError, SetLastError, HWND, LPARAM, LRESULT, PWSTR, RECT, WPARAM},
         Graphics::Gdi::GetDC,
         System::{
             LibraryLoader::GetModuleHandleW,
-            Threading::{ConvertThreadToFiber, CreateFiber},
+            Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber},
         },
         UI::WindowsAndMessaging::{
-            AdjustWindowRect, CreateWindowExW, LoadCursorW, RegisterClassW, SetWindowLongPtrW,
-            CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, WNDCLASSW,
-            WS_OVERLAPPEDWINDOW, WS_VISIBLE, GetWindowLongPtrW, DefWindowProcW,
+            AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetWindowLongPtrW,
+            LoadCursorW, PeekMessageW, RegisterClassW, SetTimer, SetWindowLongPtrW,
+            TranslateMessage, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, MSG,
+            PM_REMOVE, WM_DESTROY, WM_QUIT, WM_SIZE, WM_TIMER, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+            WS_VISIBLE,
         },
     };
 
@@ -26,6 +28,7 @@ pub mod pica_window {
         pub title: String,
         pub position: (i32, i32),
         pub size: (i32, i32),
+        pub resized: bool,
     }
 
     impl WindowAttributes {
@@ -35,6 +38,7 @@ pub mod pica_window {
                 title: "PiCa Window".to_owned(),
                 position: (0, 0),
                 size: (0, 0),
+                resized: false,
             }
         }
 
@@ -67,6 +71,7 @@ pub mod pica_window {
     pub struct Window {
         window_attributes: WindowAttributes,
         win32: Win32,
+        quit: bool,
     }
 
     impl Window {
@@ -78,6 +83,9 @@ pub mod pica_window {
 
         // // Create window with provided window attributes.
         pub fn new_with_attributes(window_attributes: WindowAttributes) -> Result<Self> {
+            let instance = unsafe { GetModuleHandleW(None) };
+            let window_class_name = "pica".to_wide();
+
             let main_fiber = unsafe { ConvertThreadToFiber(0 as *const c_void) };
             assert!(!main_fiber.is_null());
 
@@ -103,19 +111,19 @@ pub mod pica_window {
                 (CW_USEDEFAULT, CW_USEDEFAULT)
             };
 
+            println!("window size {:?}", window_size);
+
             let window_position: (i32, i32) = match window_attributes.position {
                 (0, 0) => (CW_USEDEFAULT, CW_USEDEFAULT),
                 _ => window_attributes.position,
             };
-
-            let instance = unsafe { GetModuleHandleW(None) };
 
             let window_class = {
                 unsafe {
                     WNDCLASSW {
                         hCursor: LoadCursorW(None, IDC_CROSS),
                         hInstance: instance,
-                        lpszClassName: PWSTR("pica".to_wide()),
+                        lpszClassName: PWSTR(window_class_name),
 
                         style: CS_HREDRAW | CS_VREDRAW,
                         lpfnWndProc: Some(Self::wndproc),
@@ -133,7 +141,7 @@ pub mod pica_window {
             let win32_window_handle = unsafe {
                 CreateWindowExW(
                     Default::default(),
-                    PWSTR("pica".to_wide()),
+                    PWSTR(window_class_name),
                     PWSTR((&window_attributes.title[..]).to_wide()),
                     WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                     window_position.0,
@@ -146,6 +154,13 @@ pub mod pica_window {
                     0 as *const c_void,
                 )
             };
+            if win32_window_handle == 0 {
+                println!("Failed to create window, with error code {}", unsafe {
+                    GetLastError()
+                })
+            }
+            debug_assert!(win32_window_handle != 0);
+
             // Note Geert: Unsure if I can get a valid device context here, or shouild wait after showing the window?
             let win32_device_context = unsafe { GetDC(win32_window_handle) };
             if win32_device_context == 0 {
@@ -162,14 +177,24 @@ pub mod pica_window {
                     main_fiber,
                     message_fiber: 0 as *mut c_void,
                 },
+                quit: false,
             };
 
             unsafe {
-                SetWindowLongPtrW(
+                SetLastError(0);
+                if SetWindowLongPtrW(
                     pica_window.win32.win32_window_handle,
                     GWLP_USERDATA,
                     (&mut pica_window) as *mut Self as isize,
-                )
+                ) == 0
+                    && GetLastError() != 0
+                {
+                    let error = GetLastError();
+                    println!(
+                        "Error settting userdata for window handle {}, error code: {}",
+                        pica_window.win32.win32_window_handle, error
+                    );
+                }
             };
 
             pica_window.win32.message_fiber = unsafe {
@@ -184,6 +209,12 @@ pub mod pica_window {
             Ok(pica_window)
         }
 
+        pub fn window_pull(&mut self) {
+            unsafe {
+                SwitchToFiber(self.win32.message_fiber);
+            }
+        }
+
         // Win32 message handling
         extern "system" fn wndproc(
             window_handle: HWND,
@@ -192,25 +223,55 @@ pub mod pica_window {
             lparam: LPARAM,
         ) -> LRESULT {
             unsafe {
-                println!("wndproc: {}",  GetWindowLongPtrW(window_handle, GWLP_USERDATA));
                 let pica_window = GetWindowLongPtrW(window_handle, GWLP_USERDATA) as *mut Self;
-                if !pica_window.is_null() {
-                    println!("HURRAAI!");
+                if pica_window.is_null() {
+                    return DefWindowProcW(window_handle, message, wparam, lparam);
                 }
+                match message {
+                    WM_DESTROY => {
+                        (*pica_window).quit = true;
+                        println!("WM_DESTROY");
+                        0
+                    }
 
-                // TODO Geert: Implement win32 message handling.
-                // DefWindowProcW(window_handle, message, wparam, lparam)
-                0
-                
+                    WM_TIMER => {
+                        println!("WM_TIMER trigger, switch to main fiber");
+                        SwitchToFiber((*pica_window).win32.main_fiber);
+                        0
+                    }
+
+                    WM_SIZE => {
+                        (*pica_window).window_attributes.resized = true;
+                        println!("WM_SIZE");
+                        0
+                    }
+
+                    _ => DefWindowProcW(window_handle, message, wparam, lparam),
+                }
             }
         }
 
         // Win32 message loop
         extern "system" fn message_fiber_proc(data: *mut c_void) {
+            println!("In Message Fiber!");
+
             // data is actually a pointer to our initialized pica_window::Window struct
             let pica_window: *mut Self = unsafe { std::mem::transmute(data) };
             assert!(!pica_window.is_null());
-            // TODO Geert: Implement the win32 message loop
+            unsafe { 
+                println!("set timer");
+                SetTimer((*pica_window).win32.win32_window_handle, 1, 1000, None) };
+            loop {
+                unsafe {
+                    let mut message = MSG::default();
+                    while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE).into() {
+                        TranslateMessage(&message);
+                        DispatchMessageW(&message);
+                    }
+                    // println!("No nore messages, switch to main fiber.");
+                    SwitchToFiber((*pica_window).win32.main_fiber);
+                }
+            }
         }
     }
 }
