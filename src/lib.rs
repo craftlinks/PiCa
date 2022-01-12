@@ -1,13 +1,14 @@
 /// Module for creating and managing a PiCa window
 pub mod pica_window {
 
-    use crate::utils::*;
+    use crate::{pica_time::Time, utils::*};
     use std::ffi::c_void;
     use windows::Win32::{
         Foundation::{GetLastError, SetLastError, HWND, LPARAM, LRESULT, PWSTR, RECT, WPARAM},
         Graphics::Gdi::GetDC,
         System::{
             LibraryLoader::GetModuleHandleW,
+            Performance::QueryPerformanceCounter,
             Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber},
         },
         UI::WindowsAndMessaging::{
@@ -71,6 +72,7 @@ pub mod pica_window {
     pub struct Window {
         window_attributes: WindowAttributes,
         win32: Win32,
+        pub time: Time,
         quit: bool,
     }
 
@@ -177,6 +179,7 @@ pub mod pica_window {
                     main_fiber,
                     message_fiber: 0 as *mut c_void,
                 },
+                time: Time::new(),
                 quit: false,
             };
 
@@ -209,10 +212,38 @@ pub mod pica_window {
             Ok(pica_window)
         }
 
-        pub fn window_pull(&mut self) {
+        pub fn pull(&mut self) {
+            self.window_pull();
+            self.time_pull();
+        }
+
+        fn window_pull(&mut self) {
             unsafe {
                 SwitchToFiber(self.win32.message_fiber);
             }
+        }
+
+        fn time_pull(&mut self) {
+            let mut current_ticks: i64 = 0;
+            unsafe {
+                QueryPerformanceCounter(&mut current_ticks);
+            }
+            
+            // Calculate ticks
+            self.time.delta_ticks = (current_ticks - self.time.initial_ticks) - self.time.ticks;
+            self.time.ticks = current_ticks - self.time.initial_ticks;
+
+            self.time.delta_nanoseconds = (1000 * 1000 * 1000 * self.time.delta_ticks) / self.time.ticks_per_second;
+            self.time.delta_microseconds = self.time.delta_nanoseconds / 1000;
+            self.time.delta_milliseconds = self.time.delta_microseconds / 1000;
+            self.time.seconds = self.time.delta_ticks as f32 / self.time.ticks_per_second as f32;
+
+            self.time.nanoseconds =
+                (1000 * 1000 * 1000 * self.time.ticks) / self.time.ticks_per_second;
+            self.time.microseconds = self.time.nanoseconds / 1000;
+            self.time.milliseconds = self.time.microseconds / 1000;
+            self.time. seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
+            
         }
 
         // Win32 message handling
@@ -235,7 +266,6 @@ pub mod pica_window {
                     }
 
                     WM_TIMER => {
-                        println!("WM_TIMER trigger, switch to main fiber");
                         SwitchToFiber((*pica_window).win32.main_fiber);
                         0
                     }
@@ -258,9 +288,10 @@ pub mod pica_window {
             // data is actually a pointer to our initialized pica_window::Window struct
             let pica_window: *mut Self = unsafe { std::mem::transmute(data) };
             assert!(!pica_window.is_null());
-            unsafe { 
+            unsafe {
                 println!("set timer");
-                SetTimer((*pica_window).win32.win32_window_handle, 1, 1000, None) };
+                SetTimer((*pica_window).win32.win32_window_handle, 1, 1, None)
+            };
             loop {
                 unsafe {
                     let mut message = MSG::default();
@@ -268,9 +299,43 @@ pub mod pica_window {
                         TranslateMessage(&message);
                         DispatchMessageW(&message);
                     }
-                    // println!("No nore messages, switch to main fiber.");
                     SwitchToFiber((*pica_window).win32.main_fiber);
                 }
+            }
+        }
+    }
+}
+
+pub mod pica_time {
+    use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
+    #[derive(Default)]
+    pub struct Time {
+        pub delta_ticks: i64,
+        pub delta_nanoseconds: i64,
+        pub delta_microseconds: i64,
+        pub delta_milliseconds: i64,
+        pub delta_seconds: f32,
+
+        pub ticks: i64,
+        pub nanoseconds: i64,
+        pub microseconds: i64,
+        pub milliseconds: i64,
+        pub seconds: f32,
+
+        pub initial_ticks: i64,
+        pub ticks_per_second: i64,
+    }
+
+    impl Time {
+        pub fn new() -> Self {
+            let mut ticks_per_second: i64 = 0;
+            unsafe { QueryPerformanceFrequency(&mut ticks_per_second) };
+            let mut initial_ticks: i64 = 0;
+            unsafe { QueryPerformanceCounter(&mut initial_ticks) };
+            Self {
+                ticks_per_second,
+                initial_ticks,
+                ..Default::default()
             }
         }
     }

@@ -9,7 +9,10 @@ pub fn main() -> Result<(),Error> {
 
     let mut window = Window::new_with_attributes(window_attributes)?;
     loop {
-        window.window_pull()
+        window.pull();
+        // OUCH, needs debugging...
+        let variable = window.time.delta_nanoseconds;
+        dbg!("elapsed seconds: {}", variable );
     }
     Ok(())
 }
