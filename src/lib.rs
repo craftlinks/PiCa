@@ -25,6 +25,7 @@ pub mod pica_window {
     pub type Result<T> = std::result::Result<T, crate::error::Error>;
 
     /// Window Attributes for creating a new PiCa window.
+    #[derive(Debug)]
     pub struct WindowAttributes {
         pub title: String,
         pub position: (i32, i32),
@@ -62,6 +63,7 @@ pub mod pica_window {
         }
     }
 
+    #[derive(Debug)]
     struct Win32 {
         win32_window_handle: isize,
         win32_device_context: isize,
@@ -69,6 +71,7 @@ pub mod pica_window {
         message_fiber: *mut c_void,
     }
 
+    #[derive(Debug)]
     pub struct Window {
         window_attributes: WindowAttributes,
         win32: Win32,
@@ -204,20 +207,24 @@ pub mod pica_window {
                 CreateFiber(
                     0,
                     Some(Self::message_fiber_proc),
-                    &mut pica_window as *const _ as *const c_void,
+                    &mut pica_window as *const Window as *const c_void,
                 )
             };
             assert!(!pica_window.win32.message_fiber.is_null());
 
+            pica_window.pull();
             Ok(pica_window)
         }
 
-        pub fn pull(&mut self) {
+        pub fn pull(&mut self) -> bool {
             self.window_pull();
             self.time_pull();
+            !self.quit
+
         }
 
         fn window_pull(&mut self) {
+            println!("Window Pull");
             unsafe {
                 SwitchToFiber(self.win32.message_fiber);
             }
@@ -225,8 +232,12 @@ pub mod pica_window {
 
         fn time_pull(&mut self) {
             let mut current_ticks: i64 = 0;
+            println!("TIME PULL");
             unsafe {
-                QueryPerformanceCounter(&mut current_ticks);
+                if !QueryPerformanceCounter(&mut current_ticks).as_bool() {
+                    let error = GetLastError();
+                    println!("Error getting performance count: {}", error);
+                } 
             }
             
             // Calculate ticks
@@ -243,6 +254,8 @@ pub mod pica_window {
             self.time.microseconds = self.time.nanoseconds / 1000;
             self.time.milliseconds = self.time.microseconds / 1000;
             self.time. seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
+
+            println!("   {:?}", self);
             
         }
 
@@ -266,6 +279,7 @@ pub mod pica_window {
                     }
 
                     WM_TIMER => {
+                        println!("WM_TIME");
                         SwitchToFiber((*pica_window).win32.main_fiber);
                         0
                     }
@@ -283,13 +297,11 @@ pub mod pica_window {
 
         // Win32 message loop
         extern "system" fn message_fiber_proc(data: *mut c_void) {
-            println!("In Message Fiber!");
 
             // data is actually a pointer to our initialized pica_window::Window struct
             let pica_window: *mut Self = unsafe { std::mem::transmute(data) };
             assert!(!pica_window.is_null());
             unsafe {
-                println!("set timer");
                 SetTimer((*pica_window).win32.win32_window_handle, 1, 1, None)
             };
             loop {
@@ -299,6 +311,9 @@ pub mod pica_window {
                         TranslateMessage(&message);
                         DispatchMessageW(&message);
                     }
+                    println!("MESS_FIBER -> MAIN_FIBER");
+                    println!("  {:?}", (*pica_window));
+                    println!("  Main Fiber pointer: {:?}", (*pica_window).win32.main_fiber);
                     SwitchToFiber((*pica_window).win32.main_fiber);
                 }
             }
@@ -308,7 +323,7 @@ pub mod pica_window {
 
 pub mod pica_time {
     use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
-    #[derive(Default)]
+    #[derive(Default, Debug)]
     pub struct Time {
         pub delta_ticks: i64,
         pub delta_nanoseconds: i64,
