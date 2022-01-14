@@ -73,9 +73,9 @@ pub mod pica_window {
 
     #[derive(Debug)]
     pub struct Window {
-        window_attributes: WindowAttributes,
         win32: Win32,
-        pub time: Time,
+        window_attributes: WindowAttributes,
+        // pub time: Time,
         quit: bool,
     }
 
@@ -165,6 +165,7 @@ pub mod pica_window {
                 })
             }
             debug_assert!(win32_window_handle != 0);
+            println!("Window handle after first creation: {}", win32_window_handle);
 
             // Note Geert: Unsure if I can get a valid device context here, or shouild wait after showing the window?
             let win32_device_context = unsafe { GetDC(win32_window_handle) };
@@ -182,7 +183,7 @@ pub mod pica_window {
                     main_fiber,
                     message_fiber: 0 as *mut c_void,
                 },
-                time: Time::new(),
+                // time: Time::new(),
                 quit: false,
             };
 
@@ -218,7 +219,7 @@ pub mod pica_window {
 
         pub fn pull(&mut self) -> bool {
             self.window_pull();
-            self.time_pull();
+            // self.time_pull();
             !self.quit
 
         }
@@ -230,34 +231,34 @@ pub mod pica_window {
             }
         }
 
-        fn time_pull(&mut self) {
-            let mut current_ticks: i64 = 0;
-            println!("TIME PULL");
-            unsafe {
-                if !QueryPerformanceCounter(&mut current_ticks).as_bool() {
-                    let error = GetLastError();
-                    println!("Error getting performance count: {}", error);
-                } 
-            }
+        // fn time_pull(&mut self) {
+        //     let mut current_ticks: i64 = 0;
+        //     println!("TIME PULL");
+        //     unsafe {
+        //         if !QueryPerformanceCounter(&mut current_ticks).as_bool() {
+        //             let error = GetLastError();
+        //             println!("Error getting performance count: {}", error);
+        //         } 
+        //     }
             
-            // Calculate ticks
-            self.time.delta_ticks = (current_ticks - self.time.initial_ticks) - self.time.ticks;
-            self.time.ticks = current_ticks - self.time.initial_ticks;
+        //     // Calculate ticks
+        //     self.time.delta_ticks = (current_ticks - self.time.initial_ticks) - self.time.ticks;
+        //     self.time.ticks = current_ticks - self.time.initial_ticks;
 
-            self.time.delta_nanoseconds = (1000 * 1000 * 1000 * self.time.delta_ticks) / self.time.ticks_per_second;
-            self.time.delta_microseconds = self.time.delta_nanoseconds / 1000;
-            self.time.delta_milliseconds = self.time.delta_microseconds / 1000;
-            self.time.seconds = self.time.delta_ticks as f32 / self.time.ticks_per_second as f32;
+        //     self.time.delta_nanoseconds = (1000 * 1000 * 1000 * self.time.delta_ticks) / self.time.ticks_per_second;
+        //     self.time.delta_microseconds = self.time.delta_nanoseconds / 1000;
+        //     self.time.delta_milliseconds = self.time.delta_microseconds / 1000;
+        //     self.time.seconds = self.time.delta_ticks as f32 / self.time.ticks_per_second as f32;
 
-            self.time.nanoseconds =
-                (1000 * 1000 * 1000 * self.time.ticks) / self.time.ticks_per_second;
-            self.time.microseconds = self.time.nanoseconds / 1000;
-            self.time.milliseconds = self.time.microseconds / 1000;
-            self.time. seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
+        //     self.time.nanoseconds =
+        //         (1000 * 1000 * 1000 * self.time.ticks) / self.time.ticks_per_second;
+        //     self.time.microseconds = self.time.nanoseconds / 1000;
+        //     self.time.milliseconds = self.time.microseconds / 1000;
+        //     self.time. seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
 
-            println!("   {:?}", self);
+        //     println!("   {:?}", self);
             
-        }
+        // }
 
         // Win32 message handling
         extern "system" fn wndproc(
@@ -271,6 +272,7 @@ pub mod pica_window {
                 if pica_window.is_null() {
                     return DefWindowProcW(window_handle, message, wparam, lparam);
                 }
+                println!("wndproc window handle: {}", (*pica_window).win32.win32_window_handle);
                 match message {
                     WM_DESTROY => {
                         (*pica_window).quit = true;
@@ -297,24 +299,21 @@ pub mod pica_window {
 
         // Win32 message loop
         extern "system" fn message_fiber_proc(data: *mut c_void) {
-            
-
             // data is actually a pointer to our initialized pica_window::Window struct
-            let pica_window: *mut Self = unsafe { std::mem::transmute(data) };
+            let pica_window: *mut Self = unsafe { data.cast::<Window>() };
             assert!(!pica_window.is_null());
-            unsafe {
-                SetTimer((*pica_window).win32.win32_window_handle, 1, 1, None)
-            };
+            unsafe{println!("  Main Fiber pointer: {:?}", (*pica_window).win32.main_fiber)};
+            // unsafe {
+            //     SetTimer((*pica_window).win32.win32_window_handle, 1, 1, None)
+            // };
             loop {
                 unsafe {
-                    let mut message = MSG::default();
-                    while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE).into() {
-                        TranslateMessage(&message);
-                        DispatchMessageW(&message);
-                    }
-                    println!("MESS_FIBER -> MAIN_FIBER");
-                    println!("  {:?}", (*pica_window));
-                    println!("  Main Fiber pointer: {:?}", (*pica_window).win32.main_fiber);
+                    // let mut message = MSG::default();
+                    // while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE).into() {
+                    //     TranslateMessage(&message);
+                    //     DispatchMessageW(&message);
+                    // }
+                    
                     SwitchToFiber((*pica_window).win32.main_fiber);
                 }
             }
