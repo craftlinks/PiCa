@@ -9,7 +9,7 @@ pub mod pica_window {
         System::{
             LibraryLoader::GetModuleHandleW,
             Performance::QueryPerformanceCounter,
-            Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber},
+            Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber, SetThreadStackGuarantee},
         },
         UI::WindowsAndMessaging::{
             AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetWindowLongPtrW,
@@ -205,7 +205,7 @@ pub mod pica_window {
 
             pica_window.win32.message_fiber = unsafe {
                 CreateFiber(
-                    0,
+                    1024 * 64,
                     Some(Self::message_fiber_proc),
                     &mut pica_window as *const Window as *const c_void,
                 )
@@ -297,6 +297,7 @@ pub mod pica_window {
 
         // Win32 message loop
         extern "system" fn message_fiber_proc(data: *mut c_void) {
+            
 
             // data is actually a pointer to our initialized pica_window::Window struct
             let pica_window: *mut Self = unsafe { std::mem::transmute(data) };
