@@ -17,7 +17,7 @@ struct Fiber {
 }
 
 impl Fiber {
-    pub fn new() -> Result<Self,()> {
+    pub fn new() -> Result<Box<Self>,()> {
         let x = 0;
         let main_fiber = unsafe { ConvertThreadToFiber(0 as *const c_void) };
         assert!(!main_fiber.is_null());
@@ -30,27 +30,29 @@ impl Fiber {
             },
             x,
         };
+
+        let mut boxed_fiber = Box::new(fiber_data);
         let work_fiber = unsafe {
             CreateFiber(
                 0,
                 Some(worker_fiber_proc),
-                &mut fiber_data as *mut Self as *const c_void,
+                boxed_fiber.as_mut() as *mut Fiber as *const c_void,
             )
         };
         assert!(!work_fiber.is_null());
-        fiber_data.inner.work_fiber = work_fiber;
-        Ok(fiber_data)
+        boxed_fiber.inner.work_fiber = work_fiber;
+        Ok(boxed_fiber)
     }
 }
 
 pub fn main() -> Result<(), ()> {
-    let mut fiber_data = Fiber::new()?;
+    let fiber_data = Fiber::new()?;
     while fiber_data.x < 10 {
         
         unsafe {
             SwitchToFiber(fiber_data.inner.work_fiber as *const c_void)
         }
-        println!("I never stop or crash!");
+        println!("{}", fiber_data.x);
     }
     Ok(())
 }

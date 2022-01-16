@@ -81,13 +81,13 @@ pub mod pica_window {
 
     impl Window {
         // Create window with default window attributes.
-        pub fn new() -> Self {
+        pub fn new() -> Result<Box<Self>> {
             let window_attributes = WindowAttributes::new();
             Self::new_with_attributes(window_attributes)
         }
 
         // // Create window with provided window attributes.
-        pub fn new_with_attributes(window_attributes: WindowAttributes) -> Self {
+        pub fn new_with_attributes(window_attributes: WindowAttributes) -> Result<Box<Self>> {
             let instance = unsafe { GetModuleHandleW(None) };
             let window_class_name = "pica".to_wide();
 
@@ -136,12 +136,9 @@ pub mod pica_window {
             };
 
             if unsafe { RegisterClassW(&window_class) } == 0 {
-                // return Err(Error::Window(
-                //     "Failed to register win32 window class.".to_owned(),
-                // ));
-                println!("Failed to register win32 window class, with error code {}", unsafe {
-                    GetLastError()
-                })
+                return Err(Error::Window(
+                    "Failed to register win32 window class.".to_owned(),
+                ));
             }
 
             let win32_window_handle = unsafe {
@@ -170,15 +167,12 @@ pub mod pica_window {
             // Note Geert: Unsure if I can get a valid device context here, or shouild wait after showing the window?
             let win32_device_context = unsafe { GetDC(win32_window_handle) };
             if win32_device_context == 0 {
-                // return Err(Error::Window(
-                //     "Failed to get Device Context during window creation.".to_owned(),
-                // ));
-                println!("Failed to get Device Context during window creation, with error code {}", unsafe {
-                    GetLastError()
-                })
+                return Err(Error::Window(
+                    "Failed to get Device Context during window creation.".to_owned(),
+                ));
             }
 
-            let mut pica_window = Self {
+            let mut pica_window = Box::new(Self {
                 window_attributes,
                 win32: Win32 {
                     win32_window_handle,
@@ -188,14 +182,14 @@ pub mod pica_window {
                 },
                 time: Time::new(),
                 quit: false,
-            };
+            });
 
             unsafe {
                 SetLastError(0);
                 if SetWindowLongPtrW(
                     pica_window.win32.win32_window_handle,
                     GWLP_USERDATA,
-                    (&mut pica_window) as *mut Self as isize,
+                    pica_window.as_mut() as *mut Self as isize,
                 ) == 0
                     && GetLastError() != 0
                 {
@@ -213,14 +207,14 @@ pub mod pica_window {
                 CreateFiber(
                     0,
                     Some(Self::message_fiber_proc),
-                    &mut pica_window as *mut Window as *const c_void,
+                    pica_window.as_mut() as *mut Window as *const c_void,
                 )
             };
             assert!(!pica_window.win32.message_fiber.is_null());
             // println!("{:?}", pica_window);
 
             pica_window.pull();
-            pica_window
+            Ok(pica_window)
         }
 
         pub fn pull(&mut self) -> bool {
@@ -315,7 +309,7 @@ pub mod pica_window {
             let pica_window: &mut Self = unsafe{ pica_window.as_mut().unwrap()}; 
             println!("First entry into message fiber: Main Fiber pointer: {:?}", (pica_window).win32.main_fiber);
             unsafe {
-                SetTimer((*pica_window).win32.win32_window_handle, 1, 1, None)
+                SetTimer(pica_window.win32.win32_window_handle, 1, 1, None)
             };
             loop {
                 unsafe {
@@ -326,7 +320,7 @@ pub mod pica_window {
                     }
                     // println!("  Loop Window Title: {:?}", (pica_window).window_attributes.title);
                     // println!("  Loop Main Fiber pointer: {:?}", (pica_window).win32.main_fiber);
-                    SwitchToFiber((pica_window).win32.main_fiber);
+                    SwitchToFiber(pica_window.win32.main_fiber);
                 }
             }
         }
