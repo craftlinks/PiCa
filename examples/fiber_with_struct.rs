@@ -15,11 +15,11 @@ struct Fiber {
 }
 
 impl Fiber {
-    pub fn new() -> Fiber {
+    pub fn new() -> Self {
         let x = 0;
         let main_fiber = unsafe { ConvertThreadToFiber(0 as *const c_void) };
         assert!(!main_fiber.is_null());
-        let mut fiber_data = Fiber {
+        let mut fiber_data = Self {
             inner: InnerStruct {
                 _title: "TEST".to_owned(),
                 _position: (100, 100),
@@ -32,9 +32,10 @@ impl Fiber {
             CreateFiber(
                 0,
                 Some(worker_fiber_proc),
-                &mut fiber_data as *mut Fiber as *const c_void,
+                &mut fiber_data as *mut Self as *const c_void,
             )
         };
+        assert!(!work_fiber.is_null());
         fiber_data.inner.work_fiber = work_fiber;
         fiber_data
     }
