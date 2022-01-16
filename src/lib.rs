@@ -1,8 +1,8 @@
 /// Module for creating and managing a PiCa window
 pub mod pica_window {
 
-    use crate::{pica_time::Time, utils::*};
-    use std::ffi::c_void;
+    use crate::{pica_time::Time, utils::*, pica_window};
+    use std::{ffi::c_void, borrow::BorrowMut};
     use windows::Win32::{
         Foundation::{GetLastError, SetLastError, HWND, LPARAM, LRESULT, PWSTR, RECT, WPARAM},
         Graphics::Gdi::GetDC,
@@ -204,11 +204,13 @@ pub mod pica_window {
                 }
             };
 
+            let mut boxed_window = Box::new(&mut pica_window);
+
             pica_window.win32.message_fiber = unsafe {
                 CreateFiber(
                     1024 * 64,
                     Some(Self::message_fiber_proc),
-                    &mut pica_window as *const Window as *const c_void,
+                    boxed_window.as_mut() as *mut &mut Window as *const c_void ,
                 )
             };
             assert!(!pica_window.win32.message_fiber.is_null());
@@ -300,9 +302,12 @@ pub mod pica_window {
         // Win32 message loop
         extern "system" fn message_fiber_proc(data: *mut c_void) {
             // data is actually a pointer to our initialized pica_window::Window struct
-            let pica_window: *mut Self = unsafe { data.cast::<Window>() };
-            assert!(!pica_window.is_null());
-            unsafe{println!("  Main Fiber pointer: {:?}", (*pica_window).win32.main_fiber)};
+            let pica_window: *mut Self = unsafe { *data.cast::<&mut Self>() };
+            let pica_window: &mut Self = unsafe{ pica_window.as_mut().unwrap()}; 
+            //assert!(!pica_window.is_null());
+            //let pica_window = unsafe{&*pica_window};
+            //let pica_window = &**pica_window;
+            // println!("  Main Fiber pointer: {:?}", (pica_window).win32.main_fiber);
             // unsafe {
             //     SetTimer((*pica_window).win32.win32_window_handle, 1, 1, None)
             // };
@@ -313,8 +318,9 @@ pub mod pica_window {
                     //     TranslateMessage(&message);
                     //     DispatchMessageW(&message);
                     // }
-                    
-                    SwitchToFiber((*pica_window).win32.main_fiber);
+                    // println!("  Loop Window Title: {:?}", (pica_window).window_attributes.title);
+                    // println!("  Loop Main Fiber pointer: {:?}", (pica_window).win32.main_fiber);
+                    SwitchToFiber((pica_window).win32.main_fiber);
                 }
             }
         }
