@@ -208,7 +208,7 @@ pub mod pica_window {
 
             pica_window.win32.message_fiber = unsafe {
                 CreateFiber(
-                    1024 * 64,
+                    0,
                     Some(Self::message_fiber_proc),
                     boxed_window.as_mut() as *mut &mut Window as *const c_void ,
                 )
@@ -229,7 +229,7 @@ pub mod pica_window {
         fn window_pull(&mut self) {
             println!("Window Pull");
             unsafe {
-                SwitchToFiber(self.win32.message_fiber);
+                SwitchToFiber(self.win32.message_fiber as *const c_void);
             }
         }
 
