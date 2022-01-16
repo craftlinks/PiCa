@@ -3,9 +3,10 @@ use std::ffi::c_void;
 use windows::Win32::System::Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber};
 
 struct InnerStruct {
-    title: String,
-    position: (i32, i32),
+    _title: String,
+    _position: (i32, i32),
     main_fiber: *mut c_void,
+    work_fiber: *mut c_void,
 }
 
 struct Fiber {
@@ -13,26 +14,37 @@ struct Fiber {
     x: i32,
 }
 
+impl Fiber {
+    pub fn new() -> Fiber {
+        let x = 0;
+        let main_fiber = unsafe { ConvertThreadToFiber(0 as *const c_void) };
+        assert!(!main_fiber.is_null());
+        let mut fiber_data = Fiber {
+            inner: InnerStruct {
+                _title: "TEST".to_owned(),
+                _position: (100, 100),
+                main_fiber,
+                work_fiber: 0 as *mut c_void,
+            },
+            x,
+        };
+        let work_fiber = unsafe {
+            CreateFiber(
+                0,
+                Some(worker_fiber_proc),
+                &mut fiber_data as *mut Fiber as *const c_void,
+            )
+        };
+        fiber_data.inner.work_fiber = work_fiber;
+        fiber_data
+    }
+}
+
 pub fn main() {
-    let x = 0;
-
-    let main_fiber = unsafe { ConvertThreadToFiber(0 as *const c_void) };
-
-    let mut fiber_data = Fiber { inner: InnerStruct{title: "TEST".to_owned(), position: (100, 100),main_fiber}, x };
-
-    assert!(!main_fiber.is_null());
-
-    let work_fiber = unsafe {
-        CreateFiber(
-            0,
-            Some(worker_fiber_proc),
-            &mut fiber_data as *mut Fiber as *const c_void,
-        )
-    };
-
+    let fiber_data = Fiber::new();
     while fiber_data.x <= 10 {
         println!("fiber_data: {}", fiber_data.x);
-        unsafe { SwitchToFiber(work_fiber as *const c_void) }
+        unsafe { SwitchToFiber(fiber_data.inner.work_fiber as *const c_void) }
     }
 }
 
