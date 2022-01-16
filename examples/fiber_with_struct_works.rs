@@ -2,6 +2,7 @@ use std::ffi::c_void;
 
 use windows::Win32::System::Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber};
 
+#[derive(Debug)]
 struct InnerStruct {
     _title: String,
     _position: (i32, i32),
@@ -9,6 +10,7 @@ struct InnerStruct {
     work_fiber: *mut c_void,
 }
 
+#[derive(Debug)]
 struct Fiber {
     inner: InnerStruct,
     x: i32,
@@ -41,12 +43,13 @@ impl Fiber {
     }
 }
 
-pub fn main() {
-    let fiber_data = Fiber::new();
-    while fiber_data.x <= 10 {
-        println!("fiber_data: {}", fiber_data.x);
+pub fn main() -> Result<(), ()> {
+    let mut fiber_data = Fiber::new();
+    while fiber_data.x < 10 {
         unsafe { SwitchToFiber(fiber_data.inner.work_fiber as *const c_void) }
+        println!("{}", fiber_data.x);
     }
+    Ok(())
 }
 
 extern "system" fn worker_fiber_proc(data: *mut c_void) {

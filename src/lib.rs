@@ -65,29 +65,29 @@ pub mod pica_window {
 
     #[derive(Debug)]
     struct Win32 {
-        win32_window_handle: isize,
-        win32_device_context: isize,
         main_fiber: *mut c_void,
         message_fiber: *mut c_void,
+        win32_window_handle: isize,
+        win32_device_context: isize,
     }
 
     #[derive(Debug)]
     pub struct Window {
         win32: Win32,
         window_attributes: WindowAttributes,
-        // pub time: Time,
+        pub time: Time,
         quit: bool,
     }
 
     impl Window {
         // Create window with default window attributes.
-        pub fn new() -> Result<Self> {
+        pub fn new() -> Self {
             let window_attributes = WindowAttributes::new();
             Self::new_with_attributes(window_attributes)
         }
 
         // // Create window with provided window attributes.
-        pub fn new_with_attributes(window_attributes: WindowAttributes) -> Result<Self> {
+        pub fn new_with_attributes(window_attributes: WindowAttributes) -> Self {
             let instance = unsafe { GetModuleHandleW(None) };
             let window_class_name = "pica".to_wide();
 
@@ -116,8 +116,6 @@ pub mod pica_window {
                 (CW_USEDEFAULT, CW_USEDEFAULT)
             };
 
-            println!("window size {:?}", window_size);
-
             let window_position: (i32, i32) = match window_attributes.position {
                 (0, 0) => (CW_USEDEFAULT, CW_USEDEFAULT),
                 _ => window_attributes.position,
@@ -138,9 +136,12 @@ pub mod pica_window {
             };
 
             if unsafe { RegisterClassW(&window_class) } == 0 {
-                return Err(Error::Window(
-                    "Failed to register win32 window class.".to_owned(),
-                ));
+                // return Err(Error::Window(
+                //     "Failed to register win32 window class.".to_owned(),
+                // ));
+                println!("Failed to register win32 window class, with error code {}", unsafe {
+                    GetLastError()
+                })
             }
 
             let win32_window_handle = unsafe {
@@ -165,14 +166,16 @@ pub mod pica_window {
                 })
             }
             debug_assert!(win32_window_handle != 0);
-            println!("Window handle after first creation: {}", win32_window_handle);
 
             // Note Geert: Unsure if I can get a valid device context here, or shouild wait after showing the window?
             let win32_device_context = unsafe { GetDC(win32_window_handle) };
             if win32_device_context == 0 {
-                return Err(Error::Window(
-                    "Failed to get Device Context during window creation.".to_owned(),
-                ));
+                // return Err(Error::Window(
+                //     "Failed to get Device Context during window creation.".to_owned(),
+                // ));
+                println!("Failed to get Device Context during window creation, with error code {}", unsafe {
+                    GetLastError()
+                })
             }
 
             let mut pica_window = Self {
@@ -183,7 +186,7 @@ pub mod pica_window {
                     main_fiber,
                     message_fiber: 0 as *mut c_void,
                 },
-                // time: Time::new(),
+                time: Time::new(),
                 quit: false,
             };
 
@@ -204,22 +207,24 @@ pub mod pica_window {
                 }
             };
 
-            let mut boxed_window = Box::new(&mut pica_window);
+            
 
             pica_window.win32.message_fiber = unsafe {
                 CreateFiber(
                     0,
                     Some(Self::message_fiber_proc),
-                    boxed_window.as_mut() as *mut &mut Window as *const c_void ,
+                    &mut pica_window as *mut Window as *const c_void,
                 )
             };
             assert!(!pica_window.win32.message_fiber.is_null());
+            // println!("{:?}", pica_window);
 
             pica_window.pull();
-            Ok(pica_window)
+            pica_window
         }
 
         pub fn pull(&mut self) -> bool {
+            // println!("PULL");
             self.window_pull();
             // self.time_pull();
             !self.quit
@@ -227,40 +232,41 @@ pub mod pica_window {
         }
 
         fn window_pull(&mut self) {
-            println!("Window Pull");
             unsafe {
+                
                 SwitchToFiber(self.win32.message_fiber as *const c_void);
             }
+
         }
 
-        // fn time_pull(&mut self) {
-        //     let mut current_ticks: i64 = 0;
-        //     println!("TIME PULL");
-        //     unsafe {
-        //         if !QueryPerformanceCounter(&mut current_ticks).as_bool() {
-        //             let error = GetLastError();
-        //             println!("Error getting performance count: {}", error);
-        //         } 
-        //     }
+        fn time_pull(&mut self) {
+            let mut current_ticks: i64 = 0;
+            // println!("TIME PULL");
+            unsafe {
+                if !QueryPerformanceCounter(&mut current_ticks).as_bool() {
+                    let error = GetLastError();
+                    println!("Error getting performance count: {}", error);
+                } 
+            }
             
-        //     // Calculate ticks
-        //     self.time.delta_ticks = (current_ticks - self.time.initial_ticks) - self.time.ticks;
-        //     self.time.ticks = current_ticks - self.time.initial_ticks;
+            // Calculate ticks
+            self.time.delta_ticks = (current_ticks - self.time.initial_ticks) - self.time.ticks;
+            self.time.ticks = current_ticks - self.time.initial_ticks;
 
-        //     self.time.delta_nanoseconds = (1000 * 1000 * 1000 * self.time.delta_ticks) / self.time.ticks_per_second;
-        //     self.time.delta_microseconds = self.time.delta_nanoseconds / 1000;
-        //     self.time.delta_milliseconds = self.time.delta_microseconds / 1000;
-        //     self.time.seconds = self.time.delta_ticks as f32 / self.time.ticks_per_second as f32;
+            self.time.delta_nanoseconds = (1000 * 1000 * 1000 * self.time.delta_ticks) / self.time.ticks_per_second;
+            self.time.delta_microseconds = self.time.delta_nanoseconds / 1000;
+            self.time.delta_milliseconds = self.time.delta_microseconds / 1000;
+            self.time.seconds = self.time.delta_ticks as f32 / self.time.ticks_per_second as f32;
 
-        //     self.time.nanoseconds =
-        //         (1000 * 1000 * 1000 * self.time.ticks) / self.time.ticks_per_second;
-        //     self.time.microseconds = self.time.nanoseconds / 1000;
-        //     self.time.milliseconds = self.time.microseconds / 1000;
-        //     self.time. seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
+            self.time.nanoseconds =
+                (1000 * 1000 * 1000 * self.time.ticks) / self.time.ticks_per_second;
+            self.time.microseconds = self.time.nanoseconds / 1000;
+            self.time.milliseconds = self.time.microseconds / 1000;
+            self.time. seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
 
-        //     println!("   {:?}", self);
+            // println!("   {:?}", self);
             
-        // }
+        }
 
         // Win32 message handling
         extern "system" fn wndproc(
@@ -274,7 +280,7 @@ pub mod pica_window {
                 if pica_window.is_null() {
                     return DefWindowProcW(window_handle, message, wparam, lparam);
                 }
-                println!("wndproc window handle: {}", (*pica_window).win32.win32_window_handle);
+                // println!("wndproc window handle: {}", (*pica_window).win32.win32_window_handle);
                 match message {
                     WM_DESTROY => {
                         (*pica_window).quit = true;
@@ -283,7 +289,7 @@ pub mod pica_window {
                     }
 
                     WM_TIMER => {
-                        println!("WM_TIME");
+                        // println!("WM_TIME");
                         SwitchToFiber((*pica_window).win32.main_fiber);
                         0
                     }
@@ -294,7 +300,9 @@ pub mod pica_window {
                         0
                     }
 
-                    _ => DefWindowProcW(window_handle, message, wparam, lparam),
+                    _ => {
+                        DefWindowProcW(window_handle, message, wparam, lparam)
+                    },
                 }
             }
         }
@@ -302,22 +310,20 @@ pub mod pica_window {
         // Win32 message loop
         extern "system" fn message_fiber_proc(data: *mut c_void) {
             // data is actually a pointer to our initialized pica_window::Window struct
-            let pica_window: *mut Self = unsafe { *data.cast::<&mut Self>() };
+            let pica_window: *mut Self = data.cast::<Self>();
+            assert!(!pica_window.is_null());
             let pica_window: &mut Self = unsafe{ pica_window.as_mut().unwrap()}; 
-            //assert!(!pica_window.is_null());
-            //let pica_window = unsafe{&*pica_window};
-            //let pica_window = &**pica_window;
-            // println!("  Main Fiber pointer: {:?}", (pica_window).win32.main_fiber);
-            // unsafe {
-            //     SetTimer((*pica_window).win32.win32_window_handle, 1, 1, None)
-            // };
+            println!("First entry into message fiber: Main Fiber pointer: {:?}", (pica_window).win32.main_fiber);
+            unsafe {
+                SetTimer((*pica_window).win32.win32_window_handle, 1, 1, None)
+            };
             loop {
                 unsafe {
-                    // let mut message = MSG::default();
-                    // while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE).into() {
-                    //     TranslateMessage(&message);
-                    //     DispatchMessageW(&message);
-                    // }
+                    let mut message = MSG::default();
+                    while PeekMessageW(&mut message, None, 0, 0, PM_REMOVE).into() {
+                        TranslateMessage(&message);
+                        DispatchMessageW(&message);
+                    }
                     // println!("  Loop Window Title: {:?}", (pica_window).window_attributes.title);
                     // println!("  Loop Main Fiber pointer: {:?}", (pica_window).win32.main_fiber);
                     SwitchToFiber((pica_window).win32.main_fiber);

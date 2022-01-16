@@ -7,9 +7,9 @@ pub fn main() -> Result<(), Error> {
         .with_position(50, 50)
         .with_size(800, 600);
 
-    let mut window = Window::new_with_attributes(window_attributes)?;
+    let mut window = Window::new_with_attributes(window_attributes);
     while window.pull() {
-        println!("FINISHED PULLING ROUND");
+        // println!("FINISHED PULLING ROUND");
         // let variable = window.time.delta_nanoseconds;
         // dbg!("elapsed seconds: {}", variable );
     }
