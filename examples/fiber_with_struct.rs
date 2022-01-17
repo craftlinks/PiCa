@@ -17,11 +17,11 @@ struct Fiber {
 }
 
 impl Fiber {
-    pub fn new() -> Result<Box<Self>,()> {
+    pub fn new() -> Result<*mut Self, ()> {
         let x = 0;
         let main_fiber = unsafe { ConvertThreadToFiber(0 as *const c_void) };
         assert!(!main_fiber.is_null());
-        let mut fiber_data = Self {
+        let fiber_data = Self {
             inner: InnerStruct {
                 _title: "TEST".to_owned(),
                 _position: (100, 100),
@@ -31,29 +31,32 @@ impl Fiber {
             x,
         };
 
-        let mut boxed_fiber = Box::new(fiber_data);
+        let mut fiber_data = Box::into_raw(Box::new(fiber_data));
         let work_fiber = unsafe {
             CreateFiber(
                 0,
                 Some(worker_fiber_proc),
-                boxed_fiber.as_mut() as *mut Fiber as *const c_void,
+                // &(*boxed_fiber) as *const Self as *const c_void,
+                fiber_data as *const c_void
+                // <*mut Self>::cast::<c_void>(&mut *boxed_fiber),
             )
         };
         assert!(!work_fiber.is_null());
-        boxed_fiber.inner.work_fiber = work_fiber;
-        Ok(boxed_fiber)
+        unsafe{(*fiber_data).inner.work_fiber = work_fiber};
+        Ok(fiber_data)
     }
 }
 
 pub fn main() -> Result<(), ()> {
-    let fiber_data = Fiber::new()?;
-    while fiber_data.x < 10 {
+    let fiber_data = unsafe { Box::from_raw(Fiber::new()?) };
+    
+        while fiber_data.x < 10 {
+    
+            unsafe{ SwitchToFiber(fiber_data.inner.work_fiber) };
         
-        unsafe {
-            SwitchToFiber(fiber_data.inner.work_fiber as *const c_void)
+            println!("{}", fiber_data.x);
         }
-        println!("{}", fiber_data.x);
-    }
+
     Ok(())
 }
 

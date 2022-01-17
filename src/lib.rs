@@ -1,21 +1,23 @@
 /// Module for creating and managing a PiCa window
 pub mod pica_window {
 
-    use crate::{pica_time::Time, utils::*, pica_window};
-    use std::{ffi::c_void, borrow::BorrowMut};
+    use crate::{pica_time::Time, utils::*};
+    use std::{ffi::c_void};
     use windows::Win32::{
         Foundation::{GetLastError, SetLastError, HWND, LPARAM, LRESULT, PWSTR, RECT, WPARAM},
         Graphics::Gdi::GetDC,
         System::{
             LibraryLoader::GetModuleHandleW,
             Performance::QueryPerformanceCounter,
-            Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber, SetThreadStackGuarantee},
+            Threading::{
+                ConvertThreadToFiber, CreateFiber, SwitchToFiber,
+            },
         },
         UI::WindowsAndMessaging::{
             AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetWindowLongPtrW,
             LoadCursorW, PeekMessageW, RegisterClassW, SetTimer, SetWindowLongPtrW,
             TranslateMessage, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, MSG,
-            PM_REMOVE, WM_DESTROY, WM_QUIT, WM_SIZE, WM_TIMER, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+            PM_REMOVE, WM_DESTROY, WM_SIZE, WM_TIMER, WNDCLASSW, WS_OVERLAPPEDWINDOW,
             WS_VISIBLE,
         },
     };
@@ -172,7 +174,7 @@ pub mod pica_window {
                 ));
             }
 
-            let mut pica_window = Box::new(Self {
+            let mut pica_window = Box::into_raw(Box::new(Self {
                 window_attributes,
                 win32: Win32 {
                     win32_window_handle,
@@ -182,72 +184,70 @@ pub mod pica_window {
                 },
                 time: Time::new(),
                 quit: false,
-            });
+            }));
 
             unsafe {
                 SetLastError(0);
                 if SetWindowLongPtrW(
-                    pica_window.win32.win32_window_handle,
+                    (*pica_window).win32.win32_window_handle,
                     GWLP_USERDATA,
-                    pica_window.as_mut() as *mut Self as isize,
+                    pica_window as isize,
                 ) == 0
                     && GetLastError() != 0
                 {
                     let error = GetLastError();
                     println!(
                         "Error settting userdata for window handle {}, error code: {}",
-                        pica_window.win32.win32_window_handle, error
+                        (*pica_window).win32.win32_window_handle,
+                        error
                     );
                 }
-            };
 
-            
-
-            pica_window.win32.message_fiber = unsafe {
-                CreateFiber(
+                (*pica_window).win32.message_fiber = CreateFiber(
                     0,
                     Some(Self::message_fiber_proc),
-                    pica_window.as_mut() as *mut Window as *const c_void,
-                )
-            };
-            assert!(!pica_window.win32.message_fiber.is_null());
-            // println!("{:?}", pica_window);
+                    pica_window as *const c_void,
+                );
 
-            pica_window.pull();
-            Ok(pica_window)
+                assert!(!(*pica_window).win32.message_fiber.is_null());
+                
+                // Note Geert: Unfortunately this pointer aliasing is undefined behavior.
+                // Should just return the raw pointer and live with undefined beh in application code... 
+                // However, this wil behave as expected with current Rust compiler version, so I chose ergonomics.
+                let mut pica_window = Box::from_raw(pica_window);
+
+                pica_window.pull();
+                Ok(pica_window)
+            }
         }
 
         pub fn pull(&mut self) -> bool {
-            // println!("PULL");
             self.window_pull();
-            // self.time_pull();
+            self.time_pull();
             !self.quit
-
         }
 
         fn window_pull(&mut self) {
             unsafe {
-                
                 SwitchToFiber(self.win32.message_fiber as *const c_void);
             }
-
         }
 
         fn time_pull(&mut self) {
             let mut current_ticks: i64 = 0;
-            // println!("TIME PULL");
             unsafe {
                 if !QueryPerformanceCounter(&mut current_ticks).as_bool() {
                     let error = GetLastError();
                     println!("Error getting performance count: {}", error);
-                } 
+                }
             }
-            
+
             // Calculate ticks
             self.time.delta_ticks = (current_ticks - self.time.initial_ticks) - self.time.ticks;
             self.time.ticks = current_ticks - self.time.initial_ticks;
 
-            self.time.delta_nanoseconds = (1000 * 1000 * 1000 * self.time.delta_ticks) / self.time.ticks_per_second;
+            self.time.delta_nanoseconds =
+                (1000 * 1000 * 1000 * self.time.delta_ticks) / self.time.ticks_per_second;
             self.time.delta_microseconds = self.time.delta_nanoseconds / 1000;
             self.time.delta_milliseconds = self.time.delta_microseconds / 1000;
             self.time.seconds = self.time.delta_ticks as f32 / self.time.ticks_per_second as f32;
@@ -256,10 +256,8 @@ pub mod pica_window {
                 (1000 * 1000 * 1000 * self.time.ticks) / self.time.ticks_per_second;
             self.time.microseconds = self.time.nanoseconds / 1000;
             self.time.milliseconds = self.time.microseconds / 1000;
-            self.time. seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
+            self.time.seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
 
-            // println!("   {:?}", self);
-            
         }
 
         // Win32 message handling
@@ -274,7 +272,6 @@ pub mod pica_window {
                 if pica_window.is_null() {
                     return DefWindowProcW(window_handle, message, wparam, lparam);
                 }
-                // println!("wndproc window handle: {}", (*pica_window).win32.win32_window_handle);
                 match message {
                     WM_DESTROY => {
                         (*pica_window).quit = true;
@@ -283,7 +280,6 @@ pub mod pica_window {
                     }
 
                     WM_TIMER => {
-                        // println!("WM_TIME");
                         SwitchToFiber((*pica_window).win32.main_fiber);
                         0
                     }
@@ -294,9 +290,7 @@ pub mod pica_window {
                         0
                     }
 
-                    _ => {
-                        DefWindowProcW(window_handle, message, wparam, lparam)
-                    },
+                    _ => DefWindowProcW(window_handle, message, wparam, lparam),
                 }
             }
         }
@@ -306,11 +300,12 @@ pub mod pica_window {
             // data is actually a pointer to our initialized pica_window::Window struct
             let pica_window: *mut Self = data.cast::<Self>();
             assert!(!pica_window.is_null());
-            let pica_window: &mut Self = unsafe{ pica_window.as_mut().unwrap()}; 
-            println!("First entry into message fiber: Main Fiber pointer: {:?}", (pica_window).win32.main_fiber);
-            unsafe {
-                SetTimer(pica_window.win32.win32_window_handle, 1, 1, None)
-            };
+            let pica_window: &mut Self = unsafe { pica_window.as_mut().unwrap() };
+            println!(
+                "First entry into message fiber: Main Fiber pointer: {:?}",
+                (pica_window).win32.main_fiber
+            );
+            unsafe { SetTimer(pica_window.win32.win32_window_handle, 1, 1, None) };
             loop {
                 unsafe {
                     let mut message = MSG::default();
@@ -318,8 +313,6 @@ pub mod pica_window {
                         TranslateMessage(&message);
                         DispatchMessageW(&message);
                     }
-                    // println!("  Loop Window Title: {:?}", (pica_window).window_attributes.title);
-                    // println!("  Loop Main Fiber pointer: {:?}", (pica_window).win32.main_fiber);
                     SwitchToFiber(pica_window.win32.main_fiber);
                 }
             }
