@@ -1,11 +1,11 @@
 /// Module for creating and managing a PiCa window
 pub mod pica_window {
 
-    use crate::{pica_time::Time, utils::*};
+    use crate::{pica_time::Time, utils::*, pica_mouse::Mouse};
     use std::{ffi::c_void};
     use windows::Win32::{
-        Foundation::{GetLastError, SetLastError, HWND, LPARAM, LRESULT, PWSTR, RECT, WPARAM},
-        Graphics::Gdi::GetDC,
+        Foundation::{GetLastError, SetLastError, HWND, LPARAM, LRESULT, PWSTR, RECT, WPARAM, POINT},
+        Graphics::Gdi::{GetDC, ClientToScreen},
         System::{
             LibraryLoader::GetModuleHandleW,
             Performance::QueryPerformanceCounter,
@@ -18,7 +18,7 @@ pub mod pica_window {
             LoadCursorW, PeekMessageW, RegisterClassW, SetTimer, SetWindowLongPtrW,
             TranslateMessage, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, MSG,
             PM_REMOVE, WM_DESTROY, WM_SIZE, WM_TIMER, WNDCLASSW, WS_OVERLAPPEDWINDOW,
-            WS_VISIBLE,
+            WS_VISIBLE, GetCursorPos, GetClientRect,
         },
     };
 
@@ -76,7 +76,8 @@ pub mod pica_window {
     #[derive(Debug)]
     pub struct Window {
         win32: Win32,
-        window_attributes: WindowAttributes,
+        pub window_attributes: WindowAttributes,
+        pub mouse: Mouse,
         pub time: Time,
         quit: bool,
     }
@@ -174,6 +175,8 @@ pub mod pica_window {
                 ));
             }
 
+            let mouse = Mouse::new(win32_window_handle)?;
+
             let mut pica_window = Box::into_raw(Box::new(Self {
                 window_attributes,
                 win32: Win32 {
@@ -182,6 +185,7 @@ pub mod pica_window {
                     main_fiber,
                     message_fiber: 0 as *mut c_void,
                 },
+                mouse,
                 time: Time::new(),
                 quit: false,
             }));
@@ -224,13 +228,38 @@ pub mod pica_window {
         pub fn pull(&mut self) -> bool {
             self.window_pull();
             self.time_pull();
+            self.mouse_pull();
             !self.quit
         }
 
         fn window_pull(&mut self) {
+            self.window_attributes.resized = false;
+
+            self.mouse.delta_position.0 = 0;
+            self.mouse.delta_position.1 = 0;
+            self.mouse.delta_wheel = 0;
+            self.mouse.left_button.pressed = false;
+            self.mouse.left_button.released = false;
+            self.mouse.right_button.pressed = false;
+            self.mouse.right_button.released = false;
+            
             unsafe {
                 SwitchToFiber(self.win32.message_fiber as *const c_void);
             }
+
+            self.mouse.wheel += self.mouse.delta_wheel;
+
+            let mut client_rect = RECT::default();
+            unsafe{GetClientRect(self.win32.win32_window_handle, &mut client_rect)};
+
+            self.window_attributes.size.0 = client_rect.right - client_rect.left;
+            self.window_attributes.size.1 = client_rect.bottom - client_rect.top;
+
+            let mut window_position = POINT{ x: client_rect.left, y: client_rect.top };
+            unsafe{ClientToScreen(self.win32.win32_window_handle, &mut window_position)};
+
+            self.window_attributes.position.0 = window_position.x;
+            self.window_attributes.position.1 = window_position.y;
         }
 
         fn time_pull(&mut self) {
@@ -257,6 +286,16 @@ pub mod pica_window {
             self.time.microseconds = self.time.nanoseconds / 1000;
             self.time.milliseconds = self.time.microseconds / 1000;
             self.time.seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
+
+        }
+
+        fn mouse_pull(&mut self) {
+            let mut mouse_position = POINT::default();
+            unsafe{GetCursorPos(&mut mouse_position);}
+            mouse_position.x -= self.window_attributes.position.0;
+            mouse_position.y -= self.window_attributes.position.1;
+            self.mouse.position.0 = mouse_position.x;
+            self.mouse.position.1 = mouse_position.y;
 
         }
 
@@ -355,6 +394,50 @@ pub mod pica_time {
     }
 }
 
+pub mod pica_mouse {
+    use crate::error::Error;
+    use std::mem::size_of;
+    use windows::Win32::UI::Input::{RegisterRawInputDevices, RAWINPUTDEVICE};
+    pub type Result<T> = std::result::Result<T, crate::error::Error>;
+    
+    #[derive(Debug, Default)]
+    pub struct Button {
+        pub down: bool,
+        pub pressed: bool,
+        pub released: bool,
+    }
+    #[derive(Debug, Default)]
+    pub struct Mouse {
+        pub left_button: Button,
+        pub right_button: Button,
+        pub wheel: i32,
+        pub delta_wheel: i32,
+        pub position: (i32, i32),
+        pub delta_position: (i32, i32),
+    }
+
+    impl Mouse {
+        pub fn new(win32_window_handle: isize) -> Result<Self> {
+            // TODO: Geert: You will need to Box this for sure!!
+            let raw_input_device = RAWINPUTDEVICE {
+                usUsagePage: 0x01,
+                usUsage: 0x02,
+                dwFlags: 0,
+                hwndTarget: win32_window_handle,
+            };
+            if unsafe {
+                !RegisterRawInputDevices(&raw_input_device, 1, size_of::<RAWINPUTDEVICE>() as u32)
+                    .as_bool()
+            } {
+                return Err(Error::Mouse(
+                    "Failed to register mouse as raw input device.".to_owned(),
+                ));
+            }
+            Ok(Mouse::default())
+        }
+    }
+}
+
 pub mod error {
     use std::{error, fmt};
 
@@ -363,6 +446,7 @@ pub mod error {
         /// Win32 Error
         Win32Error(Win32Error),
         Window(String),
+        Mouse(String),
     }
     /// The error type for when the OS cannot perform the requested operation.
     #[derive(Debug)]
