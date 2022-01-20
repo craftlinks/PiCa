@@ -11,9 +11,9 @@ pub fn main() -> Result<(), Error> {
     let mut window = Window::new_with_attributes(window_attributes)?;
 
     while window.pull() {
-        print!("\rwindow position: {}, {}  ", window.window_attributes.position.0, window.window_attributes.position.1);
-        print!("window size: {}, {}  ", window.window_attributes.size.0, window.window_attributes.size.1);
-        print!("mouse position: {}, {}  ",window.mouse.position.0, window.mouse.position.1);
+        // print!("\rwindow position: {}, {}  ", window.window_attributes.position.0, window.window_attributes.position.1);
+        // print!("window size: {}, {}  ", window.window_attributes.size.0, window.window_attributes.size.1);
+        // print!("mouse position: {}, {}  ",window.mouse.position.0, window.mouse.position.1);
         match window.mouse {
             
             Mouse {left_button: Button {pressed: true, ..}, ..} => {println!("LEFT BUTTON PRESSED")},

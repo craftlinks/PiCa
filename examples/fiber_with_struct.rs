@@ -45,16 +45,20 @@ impl Fiber {
         unsafe{(*fiber_data).inner.work_fiber = work_fiber};
         Ok(fiber_data)
     }
+
+    pub fn pull(&mut self) {
+        println!("Before switch {}", self.x);
+        unsafe { SwitchToFiber(self.inner.work_fiber) };
+        println!("After switch {}", self.x);
+    }
 }
 
 pub fn main() -> Result<(), ()> {
-    let fiber_data = unsafe { Box::from_raw(Fiber::new()?) };
+    let mut fiber_data = unsafe { Box::from_raw(Fiber::new()?) };
     
         while fiber_data.x < 10 {
     
-            unsafe{ SwitchToFiber(fiber_data.inner.work_fiber) };
-        
-            println!("{}", fiber_data.x);
+            fiber_data.pull();
         }
 
     Ok(())

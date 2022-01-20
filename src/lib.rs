@@ -237,7 +237,6 @@ pub mod pica_window {
 
         fn window_pull(&mut self) {
             self.window_attributes.resized = false;
-
             self.mouse.delta_position.0 = 0;
             self.mouse.delta_position.1 = 0;
             self.mouse.delta_wheel = 0;
@@ -249,13 +248,7 @@ pub mod pica_window {
             unsafe {
                 SwitchToFiber(self.win32.message_fiber as *const c_void);
             }
-
-            if self.mouse.delta_wheel > 0 {
-                self.mouse.wheel += self.mouse.delta_wheel;
-                println!("WHEEL: {}", self.mouse.wheel);
-            }
             
-
             let mut client_rect = RECT::default();
             unsafe { GetClientRect(self.win32.win32_window_handle, &mut client_rect) };
 
