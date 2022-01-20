@@ -22,6 +22,7 @@ pub fn main() -> Result<(), Error> {
             Mouse {right_button: Button {released: true, ..}, ..} => {println!("RIGHT BUTTON RELEASED")},
             _ => {},
         }
+        print!("\r{}",  std::str::from_utf8(&window.text).unwrap());
         // if window.mouse.wheel != 0 {
         //     print!("WHEEL: {}    ", window.mouse.wheel);
         // }

@@ -1,12 +1,18 @@
 /// Module for creating and managing a PiCa window
 pub mod pica_window {
 
-    use crate::{pica_mouse::Mouse, pica_time::Time, utils::*};
+    use crate::{
+        pica_mouse::{Button, Mouse},
+        pica_time::Time,
+        utils::*,
+    };
     use std::{ffi::c_void, mem::size_of};
     use windows::Win32::{
+        Devices::HumanInterfaceDevice::MOUSE_MOVE_RELATIVE,
         Foundation::{
-            GetLastError, SetLastError, HWND, LPARAM, LRESULT, POINT, PWSTR, RECT, WPARAM,
+            GetLastError, SetLastError, HWND, LPARAM, LRESULT, POINT, PSTR, PWSTR, RECT, WPARAM,
         },
+        Globalization::{WideCharToMultiByte, CP_ACP},
         Graphics::Gdi::{ClientToScreen, GetDC},
         System::{
             LibraryLoader::GetModuleHandleW,
@@ -14,20 +20,28 @@ pub mod pica_window {
             Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber},
         },
         UI::{
-            Input::{GetRawInputData, RAWINPUTHEADER, RID_INPUT, RAWINPUT, RIM_TYPEMOUSE},
+            Input::{GetRawInputData, RAWINPUT, RAWINPUTHEADER, RID_INPUT, RIM_TYPEMOUSE},
             WindowsAndMessaging::{
                 AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect,
                 GetCursorPos, GetWindowLongPtrW, LoadCursorW, PeekMessageW, RegisterClassW,
                 SetTimer, SetWindowLongPtrW, TranslateMessage, CS_HREDRAW, CS_VREDRAW,
-                CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, MSG, PM_REMOVE, WM_DESTROY, WM_INPUT,
-                WM_SIZE, WM_TIMER, WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE, RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP, RI_MOUSE_WHEEL, WHEEL_DELTA,
+                CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, MSG, PM_REMOVE, RI_MOUSE_LEFT_BUTTON_DOWN,
+                RI_MOUSE_LEFT_BUTTON_UP, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP,
+                RI_MOUSE_WHEEL, WHEEL_DELTA, WM_CHAR, WM_DESTROY, WM_INPUT, WM_SIZE, WM_TIMER,
+                WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
             },
-        }, Devices::HumanInterfaceDevice::MOUSE_MOVE_RELATIVE,
+        },
     };
 
     /// Wrapper type around [`Error`]
     use crate::error::Error;
     pub type Result<T> = std::result::Result<T, crate::error::Error>;
+
+    const MAX_KEYS: usize = 256;
+    const MAX_TEXT: usize = 256;
+    const ALT: u8 = 0x12;
+    const CTR: u8 = 0x11;
+    const SHIFT: u8 = 0x10;
 
     /// Window Attributes for creating a new PiCa window.
     #[derive(Debug)]
@@ -81,7 +95,10 @@ pub mod pica_window {
         win32: Win32,
         pub window_attributes: WindowAttributes,
         pub mouse: Mouse,
+        pub keys: [Button; MAX_KEYS],
         pub time: Time,
+        pub text: [u8; MAX_TEXT],
+        text_length: usize,
         quit: bool,
     }
 
@@ -189,7 +206,10 @@ pub mod pica_window {
                     message_fiber: 0 as *mut c_void,
                 },
                 mouse,
+                keys: [Button::default(); MAX_KEYS],
                 time: Time::new(),
+                text: [0; MAX_TEXT],
+                text_length: 0,
                 quit: false,
             }));
 
@@ -231,11 +251,16 @@ pub mod pica_window {
         pub fn pull(&mut self) -> bool {
             self.window_pull();
             self.time_pull();
+            self.keyboard_pull();
             self.mouse_pull();
             !self.quit
         }
 
         fn window_pull(&mut self) {
+            
+            self.text[0] = 0;
+            self.text_length = 0;
+            
             self.window_attributes.resized = false;
             self.mouse.delta_position.0 = 0;
             self.mouse.delta_position.1 = 0;
@@ -248,7 +273,7 @@ pub mod pica_window {
             unsafe {
                 SwitchToFiber(self.win32.message_fiber as *const c_void);
             }
-            
+
             let mut client_rect = RECT::default();
             unsafe { GetClientRect(self.win32.win32_window_handle, &mut client_rect) };
 
@@ -289,6 +314,10 @@ pub mod pica_window {
             self.time.microseconds = self.time.nanoseconds / 1000;
             self.time.milliseconds = self.time.microseconds / 1000;
             self.time.seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
+        }
+
+        fn keyboard_pull(&mut self) {
+            // Geert TODO: implement keyboard pull
         }
 
         fn mouse_pull(&mut self) {
@@ -335,23 +364,40 @@ pub mod pica_window {
                         ) == size
                         {
                             let raw_input: RAWINPUT = *(buffer.as_ptr().cast::<RAWINPUT>());
-                            if raw_input.header.dwType == RIM_TYPEMOUSE && raw_input.data.mouse.usFlags == MOUSE_MOVE_RELATIVE as u16 {
+                            if raw_input.header.dwType == RIM_TYPEMOUSE
+                                && raw_input.data.mouse.usFlags == MOUSE_MOVE_RELATIVE as u16
+                            {
                                 pica_window.mouse.delta_position.0 += raw_input.data.mouse.lLastX;
                                 pica_window.mouse.delta_position.1 += raw_input.data.mouse.lLastY;
 
-                                let button_flags = raw_input.data.mouse.Anonymous.Anonymous.usButtonFlags;
+                                let button_flags =
+                                    raw_input.data.mouse.Anonymous.Anonymous.usButtonFlags;
 
                                 let mut left_button_down = (pica_window).mouse.left_button.down;
-                                if button_flags as u32 & RI_MOUSE_LEFT_BUTTON_DOWN != 0 {left_button_down = true};
-                                if button_flags as u32 & RI_MOUSE_LEFT_BUTTON_UP != 0 {left_button_down = false};
+                                if button_flags as u32 & RI_MOUSE_LEFT_BUTTON_DOWN != 0 {
+                                    left_button_down = true
+                                };
+                                if button_flags as u32 & RI_MOUSE_LEFT_BUTTON_UP != 0 {
+                                    left_button_down = false
+                                };
 
-                                pica_window.mouse.left_button.update_button(left_button_down);
+                                pica_window
+                                    .mouse
+                                    .left_button
+                                    .update_button(left_button_down);
 
                                 let mut right_button_down = pica_window.mouse.right_button.down;
-                                if button_flags as u32 & RI_MOUSE_RIGHT_BUTTON_DOWN != 0 {right_button_down = true};
-                                if button_flags as u32 & RI_MOUSE_RIGHT_BUTTON_UP != 0 {right_button_down = false};
+                                if button_flags as u32 & RI_MOUSE_RIGHT_BUTTON_DOWN != 0 {
+                                    right_button_down = true
+                                };
+                                if button_flags as u32 & RI_MOUSE_RIGHT_BUTTON_UP != 0 {
+                                    right_button_down = false
+                                };
 
-                                pica_window.mouse.right_button.update_button(right_button_down);
+                                pica_window
+                                    .mouse
+                                    .right_button
+                                    .update_button(right_button_down);
 
                                 // Alternative syntax, no opinions on what's "cleanest"
                                 // right_button_down = match button_flags {
@@ -360,13 +406,38 @@ pub mod pica_window {
                                 //     _ => right_button_down
                                 // };
 
-                              if button_flags as u32 & RI_MOUSE_WHEEL != 0 {
-                                    pica_window.mouse.delta_wheel += raw_input.data.mouse.Anonymous.Anonymous.usButtonData as i32 / WHEEL_DELTA as i32;
+                                if button_flags as u32 & RI_MOUSE_WHEEL != 0 {
+                                    pica_window.mouse.delta_wheel +=
+                                        raw_input.data.mouse.Anonymous.Anonymous.usButtonData
+                                            as i32
+                                            / WHEEL_DELTA as i32;
                                     pica_window.mouse.wheel += pica_window.mouse.delta_wheel;
-                                }  
-                            } 
+                                }
+                            }
                         }
 
+                        0
+                    }
+
+                    WM_CHAR => {
+                        let mut utf16_character: u16 = wparam as u16;
+                        let mut ascii_character: u8 = 0;
+                        let ascii_length = WideCharToMultiByte(
+                            CP_ACP,
+                            0,
+                            PWSTR(&mut utf16_character),
+                            1,
+                            PSTR(&mut ascii_character),
+                            1,
+                            PSTR(0 as *mut u8),
+                            0 as *mut i32,
+                        );
+                        if ascii_length == 1 && pica_window.text_length + 1 < size_of::<[u8; MAX_TEXT]>() - 1 {
+                            pica_window.text[pica_window.text_length] = ascii_character;
+                            pica_window.text[pica_window.text_length + 1] = 0;
+                            pica_window.text_length += ascii_length as usize; 
+
+                        }
                         0
                     }
 
@@ -458,7 +529,7 @@ pub mod pica_mouse {
     use windows::Win32::UI::Input::{RegisterRawInputDevices, RAWINPUTDEVICE};
     pub type Result<T> = std::result::Result<T, crate::error::Error>;
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub struct Button {
         pub down: bool,
         pub pressed: bool,

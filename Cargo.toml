@@ -16,4 +16,5 @@ features = [
      "Win32_System_Threading",
      "Win32_System_Performance",
      "Win32_Devices_HumanInterfaceDevice",
+     "Win32_Globalization",
 ]
