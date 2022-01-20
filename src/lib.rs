@@ -1,25 +1,28 @@
 /// Module for creating and managing a PiCa window
 pub mod pica_window {
 
-    use crate::{pica_time::Time, utils::*, pica_mouse::Mouse};
-    use std::{ffi::c_void};
+    use crate::{pica_mouse::Mouse, pica_time::Time, utils::*};
+    use std::{ffi::c_void, mem::size_of};
     use windows::Win32::{
-        Foundation::{GetLastError, SetLastError, HWND, LPARAM, LRESULT, PWSTR, RECT, WPARAM, POINT},
-        Graphics::Gdi::{GetDC, ClientToScreen},
+        Foundation::{
+            GetLastError, SetLastError, HWND, LPARAM, LRESULT, POINT, PWSTR, RECT, WPARAM,
+        },
+        Graphics::Gdi::{ClientToScreen, GetDC},
         System::{
             LibraryLoader::GetModuleHandleW,
             Performance::QueryPerformanceCounter,
-            Threading::{
-                ConvertThreadToFiber, CreateFiber, SwitchToFiber,
+            Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber},
+        },
+        UI::{
+            Input::{GetRawInputData, RAWINPUTHEADER, RID_INPUT, RAWINPUT, RIM_TYPEMOUSE},
+            WindowsAndMessaging::{
+                AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect,
+                GetCursorPos, GetWindowLongPtrW, LoadCursorW, PeekMessageW, RegisterClassW,
+                SetTimer, SetWindowLongPtrW, TranslateMessage, CS_HREDRAW, CS_VREDRAW,
+                CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, MSG, PM_REMOVE, WM_DESTROY, WM_INPUT,
+                WM_SIZE, WM_TIMER, WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE, RI_MOUSE_LEFT_BUTTON_DOWN, RI_MOUSE_LEFT_BUTTON_UP, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP, RI_MOUSE_WHEEL, WHEEL_DELTA,
             },
-        },
-        UI::WindowsAndMessaging::{
-            AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetWindowLongPtrW,
-            LoadCursorW, PeekMessageW, RegisterClassW, SetTimer, SetWindowLongPtrW,
-            TranslateMessage, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, MSG,
-            PM_REMOVE, WM_DESTROY, WM_SIZE, WM_TIMER, WNDCLASSW, WS_OVERLAPPEDWINDOW,
-            WS_VISIBLE, GetCursorPos, GetClientRect,
-        },
+        }, Devices::HumanInterfaceDevice::MOUSE_MOVE_RELATIVE,
     };
 
     /// Wrapper type around [`Error`]
@@ -214,9 +217,9 @@ pub mod pica_window {
                 );
 
                 assert!(!(*pica_window).win32.message_fiber.is_null());
-                
+
                 // Note Geert: Unfortunately this pointer aliasing is undefined behavior.
-                // Should just return the raw pointer and live with undefined beh in application code... 
+                // Should just return the raw pointer and live with undefined beh in application code...
                 // However, this wil behave as expected with current Rust compiler version, so I chose ergonomics.
                 let mut pica_window = Box::from_raw(pica_window);
 
@@ -242,21 +245,28 @@ pub mod pica_window {
             self.mouse.left_button.released = false;
             self.mouse.right_button.pressed = false;
             self.mouse.right_button.released = false;
-            
+
             unsafe {
                 SwitchToFiber(self.win32.message_fiber as *const c_void);
             }
 
-            self.mouse.wheel += self.mouse.delta_wheel;
+            if self.mouse.delta_wheel > 0 {
+                self.mouse.wheel += self.mouse.delta_wheel;
+                println!("WHEEL: {}", self.mouse.wheel);
+            }
+            
 
             let mut client_rect = RECT::default();
-            unsafe{GetClientRect(self.win32.win32_window_handle, &mut client_rect)};
+            unsafe { GetClientRect(self.win32.win32_window_handle, &mut client_rect) };
 
             self.window_attributes.size.0 = client_rect.right - client_rect.left;
             self.window_attributes.size.1 = client_rect.bottom - client_rect.top;
 
-            let mut window_position = POINT{ x: client_rect.left, y: client_rect.top };
-            unsafe{ClientToScreen(self.win32.win32_window_handle, &mut window_position)};
+            let mut window_position = POINT {
+                x: client_rect.left,
+                y: client_rect.top,
+            };
+            unsafe { ClientToScreen(self.win32.win32_window_handle, &mut window_position) };
 
             self.window_attributes.position.0 = window_position.x;
             self.window_attributes.position.1 = window_position.y;
@@ -286,17 +296,17 @@ pub mod pica_window {
             self.time.microseconds = self.time.nanoseconds / 1000;
             self.time.milliseconds = self.time.microseconds / 1000;
             self.time.seconds = self.time.ticks as f32 / self.time.ticks_per_second as f32;
-
         }
 
         fn mouse_pull(&mut self) {
             let mut mouse_position = POINT::default();
-            unsafe{GetCursorPos(&mut mouse_position);}
+            unsafe {
+                GetCursorPos(&mut mouse_position);
+            }
             mouse_position.x -= self.window_attributes.position.0;
             mouse_position.y -= self.window_attributes.position.1;
             self.mouse.position.0 = mouse_position.x;
             self.mouse.position.1 = mouse_position.y;
-
         }
 
         // Win32 message handling
@@ -311,21 +321,76 @@ pub mod pica_window {
                 if pica_window.is_null() {
                     return DefWindowProcW(window_handle, message, wparam, lparam);
                 }
+                let mut pica_window = &mut *pica_window;
                 match message {
+                    WM_INPUT => {
+                        let mut size: u32 = 0;
+                        GetRawInputData(
+                            lparam,
+                            RID_INPUT,
+                            0 as *mut c_void,
+                            &mut size as *mut u32,
+                            size_of::<RAWINPUTHEADER>() as u32,
+                        );
+                        let mut buffer: Vec<u8> = vec![0; size as usize];
+                        if GetRawInputData(
+                            lparam,
+                            RID_INPUT,
+                            buffer[..].as_mut_ptr() as *mut c_void,
+                            &mut size as *mut u32,
+                            size_of::<RAWINPUTHEADER>() as u32,
+                        ) == size
+                        {
+                            let raw_input: RAWINPUT = *(buffer.as_ptr().cast::<RAWINPUT>());
+                            if raw_input.header.dwType == RIM_TYPEMOUSE && raw_input.data.mouse.usFlags == MOUSE_MOVE_RELATIVE as u16 {
+                                pica_window.mouse.delta_position.0 += raw_input.data.mouse.lLastX;
+                                pica_window.mouse.delta_position.1 += raw_input.data.mouse.lLastY;
+
+                                let button_flags = raw_input.data.mouse.Anonymous.Anonymous.usButtonFlags;
+
+                                let mut left_button_down = (pica_window).mouse.left_button.down;
+                                if button_flags as u32 & RI_MOUSE_LEFT_BUTTON_DOWN != 0 {left_button_down = true};
+                                if button_flags as u32 & RI_MOUSE_LEFT_BUTTON_UP != 0 {left_button_down = false};
+
+                                pica_window.mouse.left_button.update_button(left_button_down);
+
+                                let mut right_button_down = pica_window.mouse.right_button.down;
+                                if button_flags as u32 & RI_MOUSE_RIGHT_BUTTON_DOWN != 0 {right_button_down = true};
+                                if button_flags as u32 & RI_MOUSE_RIGHT_BUTTON_UP != 0 {right_button_down = false};
+
+                                pica_window.mouse.right_button.update_button(right_button_down);
+
+                                // Alternative syntax, no opinions on what's "cleanest"
+                                // right_button_down = match button_flags {
+                                //     _ if button_flags.into() & RI_MOUSE_RIGHT_BUTTON_DOWN != 0 => true,
+                                //     _ if button_flags.into() & RI_MOUSE_RIGHT_BUTTON_UP != 0 => false,
+                                //     _ => right_button_down
+                                // };
+
+                              if button_flags as u32 & RI_MOUSE_WHEEL != 0 {
+                                    pica_window.mouse.delta_wheel += raw_input.data.mouse.Anonymous.Anonymous.usButtonData as i32 / WHEEL_DELTA as i32;
+                                    pica_window.mouse.wheel += pica_window.mouse.delta_wheel;
+                                }  
+                            } 
+                        }
+
+                        0
+                    }
+
                     WM_DESTROY => {
-                        (*pica_window).quit = true;
+                        pica_window.quit = true;
                         println!("WM_DESTROY");
                         0
                     }
 
                     WM_TIMER => {
-                        SwitchToFiber((*pica_window).win32.main_fiber);
+                        SwitchToFiber(pica_window.win32.main_fiber);
                         0
                     }
 
                     WM_SIZE => {
-                        (*pica_window).window_attributes.resized = true;
-                        println!("WM_SIZE");
+                        pica_window.window_attributes.resized = true;
+                        // println!("WM_SIZE");
                         0
                     }
 
@@ -399,13 +464,23 @@ pub mod pica_mouse {
     use std::mem::size_of;
     use windows::Win32::UI::Input::{RegisterRawInputDevices, RAWINPUTDEVICE};
     pub type Result<T> = std::result::Result<T, crate::error::Error>;
-    
+
     #[derive(Debug, Default)]
     pub struct Button {
         pub down: bool,
         pub pressed: bool,
         pub released: bool,
     }
+
+    impl Button {
+        pub fn update_button(&mut self, is_down: bool) {
+            let was_down = self.down;
+            self.down = is_down;
+            self.pressed = !was_down && is_down;
+            self.released = was_down && !is_down;
+        }
+    }
+
     #[derive(Debug, Default)]
     pub struct Mouse {
         pub left_button: Button,
@@ -419,14 +494,14 @@ pub mod pica_mouse {
     impl Mouse {
         pub fn new(win32_window_handle: isize) -> Result<Self> {
             // TODO: Geert: You will need to Box this for sure!!
-            let raw_input_device = RAWINPUTDEVICE {
+            let raw_input_device = Box::into_raw(Box::new(RAWINPUTDEVICE {
                 usUsagePage: 0x01,
                 usUsage: 0x02,
                 dwFlags: 0,
                 hwndTarget: win32_window_handle,
-            };
+            }));
             if unsafe {
-                !RegisterRawInputDevices(&raw_input_device, 1, size_of::<RAWINPUTDEVICE>() as u32)
+                !RegisterRawInputDevices(raw_input_device, 1, size_of::<RAWINPUTDEVICE>() as u32)
                     .as_bool()
             } {
                 return Err(Error::Mouse(

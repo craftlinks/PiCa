@@ -15,4 +15,5 @@ features = [
      "Win32_UI_WindowsAndMessaging",
      "Win32_System_Threading",
      "Win32_System_Performance",
+     "Win32_Devices_HumanInterfaceDevice",
 ]
