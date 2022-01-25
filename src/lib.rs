@@ -95,7 +95,7 @@ pub mod pica_window {
         win32: Win32,
         pub window_attributes: WindowAttributes,
         pub mouse: Mouse,
-        pub keys: [Button; MAX_KEYS],
+        pub keys: [Button; 256],
         pub time: Time,
         pub text: [u8; MAX_TEXT],
         text_length: usize,
@@ -320,7 +320,7 @@ pub mod pica_window {
             let keyboard_state:&mut [u8;256] = &mut [0;256];
             unsafe { GetKeyboardState(keyboard_state.as_mut_ptr())};
             for key in 0..256 {
-                self.keys[key].update_button ((keyboard_state[key] >> 7) == 1)
+                self.keys[key].update_button((keyboard_state[key] >> 7) == 1);
             }
         }
 
@@ -535,9 +535,9 @@ pub mod pica_mouse {
 
     #[derive(Debug, Default, Clone, Copy)]
     pub struct Button {
-        pub down: bool,
-        pub pressed: bool,
-        pub released: bool,
+        pub down: bool,     // current state
+        pub pressed: bool,  // !down -> down
+        pub released: bool, // down -> !down
     }
 
     impl Button {

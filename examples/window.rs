@@ -11,9 +11,6 @@ pub fn main() -> Result<(), Error> {
     let mut window = Window::new_with_attributes(window_attributes)?;
 
     while window.pull() {
-        // print!("\rwindow position: {}, {}  ", window.window_attributes.position.0, window.window_attributes.position.1);
-        // print!("window size: {}, {}  ", window.window_attributes.size.0, window.window_attributes.size.1);
-        // print!("mouse position: {}, {}  ",window.mouse.position.0, window.mouse.position.1);
         match window.mouse {
             
             Mouse {left_button: Button {pressed: true, ..}, ..} => {println!("LEFT BUTTON PRESSED")},
@@ -22,15 +19,9 @@ pub fn main() -> Result<(), Error> {
             Mouse {right_button: Button {released: true, ..}, ..} => {println!("RIGHT BUTTON RELEASED")},
             _ => {},
         }
-        print!("\r{}",  std::str::from_utf8(&window.text).unwrap());
-        // if window.mouse.wheel != 0 {
-        //     print!("WHEEL: {}    ", window.mouse.wheel);
-        // }
-            
-
-
-        // let variable = window.time.delta_nanoseconds;
-        // dbg!("elapsed seconds: {}", variable );
+        if window.keys['A' as u8 as usize].pressed {
+            println!("TrIggErED!!");
+        }
     }
     Ok(())
 }
