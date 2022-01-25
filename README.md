@@ -1,2 +1,2 @@
 # PiCa
- Minimal WebGPU Renderer
+A Minimal Real-Time Simulation and WebGPU Rendering Layer
