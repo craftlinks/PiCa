@@ -20,7 +20,7 @@ pub mod pica_window {
             Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber},
         },
         UI::{
-            Input::{GetRawInputData, RAWINPUT, RAWINPUTHEADER, RID_INPUT, RIM_TYPEMOUSE},
+            Input::{GetRawInputData, RAWINPUT, RAWINPUTHEADER, RID_INPUT, RIM_TYPEMOUSE, KeyboardAndMouse::GetKeyboardState},
             WindowsAndMessaging::{
                 AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect,
                 GetCursorPos, GetWindowLongPtrW, LoadCursorW, PeekMessageW, RegisterClassW,
@@ -317,7 +317,11 @@ pub mod pica_window {
         }
 
         fn keyboard_pull(&mut self) {
-            // Geert TODO: implement keyboard pull
+            let keyboard_state:&mut [u8;256] = &mut [0;256];
+            unsafe { GetKeyboardState(keyboard_state.as_mut_ptr())};
+            for key in 0..256 {
+                self.keys[key].update_button ((keyboard_state[key] >> 7) == 1)
+            }
         }
 
         fn mouse_pull(&mut self) {
