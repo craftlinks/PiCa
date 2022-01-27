@@ -98,7 +98,7 @@ pub mod pica_window {
         pub keys: [Button; 256],
         pub time: Time,
         pub text: [u8; MAX_TEXT],
-        text_length: usize,
+        pub text_length: usize,
         quit: bool,
     }
 
@@ -450,8 +450,9 @@ pub mod pica_window {
                         println!("WM_DESTROY");
                         0
                     }
-
-                    WM_TIMER => {
+                    
+                    /* WM_PAINT |*/ WM_TIMER => {
+                        // Required to break out recursive message loops, so our main thread gets time to run!
                         SwitchToFiber(pica_window.win32.main_fiber);
                         0
                     }
