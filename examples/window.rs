@@ -11,7 +11,7 @@ pub fn main() -> Result<(), Error> {
         .with_size(800, 600);
 
     let mut window = Window::new_with_attributes(window_attributes)?;
-    let mut last_print_ticks = Instant::now();
+    let mut last_print_time: f32 = 0.0;
     while window.pull() {
         match window.mouse {
             Mouse {
@@ -48,9 +48,8 @@ pub fn main() -> Result<(), Error> {
             println!("{:?}", window.text);
         }
 
-        let now = Instant::now();
-        let duration = Duration::new(0, 250_000_000);
-        if now.duration_since(last_print_ticks) > duration {
+        
+        if window.time.seconds - last_print_time > 0.25 {
             println!(
                 "Position: {:?}, Size: {:?}, Mouse: {:?}, delta_us: {:?}, ms: {:?}",
                 window.window_attributes.position,
@@ -60,7 +59,7 @@ pub fn main() -> Result<(), Error> {
                 window.time.milliseconds,
 
             );
-            last_print_ticks = Instant::now();
+            last_print_time = window.time.seconds;
         }
     }
     Ok(())
