@@ -102,6 +102,15 @@ pub mod pica_window {
         quit: bool,
     }
 
+    unsafe impl raw_window_handle::HasRawWindowHandle for Window {
+        fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
+            let mut handle = raw_window_handle::Win32Handle::empty();
+            handle.hwnd = self.win32.win32_window_handle as *mut c_void;
+            handle.hinstance = unsafe { GetModuleHandleW(None) } as *mut c_void;
+            raw_window_handle::RawWindowHandle::Win32(handle)
+        }
+    }
+
     impl Window {
         // Create window with default window attributes.
         pub fn new() -> Result<Box<Self>> {
@@ -632,6 +641,7 @@ pub mod error {
 
 /// Some common utilities.
 pub mod utils {
+
     /// Utility to convert Rust `&str` into wide UTF-16 string.
     pub trait ToWide {
         fn to_wide(&self) -> *mut u16;
