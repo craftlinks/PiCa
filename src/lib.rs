@@ -1,10 +1,13 @@
+pub mod renderer;
+use renderer::D3D12Renderer;
+
 /// Module for creating and managing a PiCa window
 pub mod pica_window {
 
     use crate::{
         pica_mouse::{Button, Mouse},
         pica_time::Time,
-        utils::*,
+        utils::*, renderer::{D3D12Renderer, D3D12Resources, D3D12},
     };
     use std::{ffi::c_void, mem::size_of};
     use windows::Win32::{
@@ -93,6 +96,7 @@ pub mod pica_window {
     #[derive(Debug)]
     pub struct Window {
         win32: Win32,
+        d3d12: D3D12,
         pub window_attributes: WindowAttributes,
         pub mouse: Mouse,
         pub keys: [Button; 256],
@@ -205,6 +209,7 @@ pub mod pica_window {
             }
 
             let mouse = Mouse::new(win32_window_handle)?;
+            let d3d12 = D3D12::new(win32_window_handle)?;
 
             let mut pica_window = Box::into_raw(Box::new(Self {
                 window_attributes,
@@ -220,6 +225,7 @@ pub mod pica_window {
                 text: ['0'; MAX_TEXT],
                 text_length: 0,
                 quit: false,
+                d3d12,
             }));
 
             unsafe {
