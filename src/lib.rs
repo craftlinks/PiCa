@@ -13,14 +13,14 @@ pub mod pica_window {
             GetLastError, SetLastError, HWND, LPARAM, LRESULT, POINT, PSTR, PWSTR, RECT, WPARAM,
         },
         Globalization::{WideCharToMultiByte, CP_ACP},
-        Graphics::Gdi::{ClientToScreen, GetDC},
+        Graphics::Gdi::{ClientToScreen, GetDC, HDC},
         System::{
             LibraryLoader::GetModuleHandleW,
             Performance::QueryPerformanceCounter,
             Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber},
         },
         UI::{
-            Input::{GetRawInputData, RAWINPUT, RAWINPUTHEADER, RID_INPUT, RIM_TYPEMOUSE, KeyboardAndMouse::GetKeyboardState},
+            Input::{GetRawInputData, RAWINPUT, RAWINPUTHEADER, RID_INPUT, RIM_TYPEMOUSE, KeyboardAndMouse::GetKeyboardState, HRAWINPUT},
             WindowsAndMessaging::{
                 AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect,
                 GetCursorPos, GetWindowLongPtrW, LoadCursorW, PeekMessageW, RegisterClassW,
@@ -86,8 +86,8 @@ pub mod pica_window {
     struct Win32 {
         main_fiber: *mut c_void,
         message_fiber: *mut c_void,
-        win32_window_handle: isize,
-        win32_device_context: isize,
+        win32_window_handle: HWND,
+        win32_device_context: HDC,
     }
 
     #[derive(Debug)]
@@ -105,8 +105,8 @@ pub mod pica_window {
     unsafe impl raw_window_handle::HasRawWindowHandle for Window {
         fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
             let mut handle = raw_window_handle::Win32Handle::empty();
-            handle.hwnd = self.win32.win32_window_handle as *mut c_void;
-            handle.hinstance = unsafe { GetModuleHandleW(None) } as *mut c_void;
+            handle.hwnd = self.win32.win32_window_handle.0 as *mut c_void;
+            handle.hinstance = unsafe { GetModuleHandleW(None).0 } as *mut c_void;
             raw_window_handle::RawWindowHandle::Win32(handle)
         }
     }
@@ -189,16 +189,16 @@ pub mod pica_window {
                     0 as *const c_void,
                 )
             };
-            if win32_window_handle == 0 {
+            if win32_window_handle.0 == 0 {
                 println!("Failed to create window, with error code {}", unsafe {
                     GetLastError()
                 })
             }
-            debug_assert!(win32_window_handle != 0);
+            debug_assert!(win32_window_handle.0 != 0);
 
             // Note Geert: Unsure if I can get a valid device context here, or shouild wait after showing the window?
             let win32_device_context = unsafe { GetDC(win32_window_handle) };
-            if win32_device_context == 0 {
+            if win32_device_context.0 == 0 {
                 return Err(Error::Window(
                     "Failed to get Device Context during window creation.".to_owned(),
                 ));
@@ -209,8 +209,8 @@ pub mod pica_window {
             let mut pica_window = Box::into_raw(Box::new(Self {
                 window_attributes,
                 win32: Win32 {
-                    win32_window_handle,
-                    win32_device_context,
+                    win32_window_handle: win32_window_handle,
+                    win32_device_context: win32_device_context,
                     main_fiber,
                     message_fiber: 0 as *mut c_void,
                 },
@@ -234,7 +234,7 @@ pub mod pica_window {
                     let error = GetLastError();
                     println!(
                         "Error settting userdata for window handle {}, error code: {}",
-                        (*pica_window).win32.win32_window_handle,
+                        (*pica_window).win32.win32_window_handle.0,
                         error
                     );
                 }
@@ -361,7 +361,7 @@ pub mod pica_window {
                     WM_INPUT => {
                         let mut size: u32 = 0;
                         GetRawInputData(
-                            lparam,
+                            HRAWINPUT(lparam.0),
                             RID_INPUT,
                             0 as *mut c_void,
                             &mut size as *mut u32,
@@ -369,7 +369,7 @@ pub mod pica_window {
                         );
                         let mut buffer: Vec<u8> = vec![0; size as usize];
                         if GetRawInputData(
-                            lparam,
+                            HRAWINPUT(lparam.0),
                             RID_INPUT,
                             buffer[..].as_mut_ptr() as *mut c_void,
                             &mut size as *mut u32,
@@ -429,11 +429,11 @@ pub mod pica_window {
                             }
                         }
 
-                        0
+                        LRESULT(0)
                     }
 
                     WM_CHAR => {
-                        let mut utf16_character: u16 = wparam as u16;
+                        let mut utf16_character: u16 = wparam.0 as u16;
                         let mut ascii_character: u8 = 0;
                         let ascii_length = WideCharToMultiByte(
                             CP_ACP,
@@ -451,25 +451,25 @@ pub mod pica_window {
                             pica_window.text_length += ascii_length as usize; 
 
                         }
-                        0
+                        LRESULT(0)
                     }
 
                     WM_DESTROY => {
                         pica_window.quit = true;
                         println!("WM_DESTROY");
-                        0
+                        LRESULT(0)
                     }
                     
                     /* WM_PAINT |*/ WM_TIMER => {
                         // Required to break out recursive message loops, so our main thread gets time to run!
                         SwitchToFiber(pica_window.win32.main_fiber);
-                        0
+                        LRESULT(0)
                     }
 
                     WM_SIZE => {
                         pica_window.window_attributes.resized = true;
                         // println!("WM_SIZE");
-                        0
+                        LRESULT(0)
                     }
 
                     _ => DefWindowProcW(window_handle, message, wparam, lparam),
@@ -540,7 +540,7 @@ pub mod pica_time {
 pub mod pica_mouse {
     use crate::error::Error;
     use std::mem::size_of;
-    use windows::Win32::UI::Input::{RegisterRawInputDevices, RAWINPUTDEVICE};
+    use windows::Win32::{UI::Input::{RegisterRawInputDevices, RAWINPUTDEVICE}, Foundation::HWND};
     pub type Result<T> = std::result::Result<T, crate::error::Error>;
 
     #[derive(Debug, Default, Clone, Copy)]
@@ -570,7 +570,7 @@ pub mod pica_mouse {
     }
 
     impl Mouse {
-        pub fn new(win32_window_handle: isize) -> Result<Self> {
+        pub fn new(win32_window_handle: HWND) -> Result<Self> {
             // TODO: Geert: You will need to Box this for sure!!
             let raw_input_device = Box::into_raw(Box::new(RAWINPUTDEVICE {
                 usUsagePage: 0x01,
