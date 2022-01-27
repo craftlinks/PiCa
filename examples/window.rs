@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use PiCa::error::Error;
 use PiCa::pica_mouse::{Button, Mouse};
-use PiCa::pica_window::{Window, WindowAttributes};
+use PiCa::pica_window::{Window, WindowAttributes, CTR, ALT, SHIFT, };
 
 pub fn main() -> Result<(), Error> {
     let window_attributes = WindowAttributes::new()
@@ -43,13 +43,23 @@ pub fn main() -> Result<(), Error> {
         if window.keys['A' as u8 as usize].pressed {
             println!("TrIggErED!!");
         }
+        if window.keys[CTR].pressed {
+            println!("Ctrl is pressed!");
+        }
 
+        if window.keys[ALT].pressed {
+            println!("ALT is pressed!");
+        }
+        if window.keys[SHIFT].pressed {
+            println!("SHIFT is pressed!");
+        }
+        // Test that we can capture all text input with this kind of API, we do!
         if window.text_length > 0 {
-            println!("{:?}", window.text);
+            println!("{:?}", &window.text[..window.text_length]);
         }
 
         
-        if window.time.seconds - last_print_time > 0.25 {
+        if window.time.seconds - last_print_time > 1.0 {
             println!(
                 "Position: {:?}, Size: {:?}, Mouse: {:?}, delta_us: {:?}, ms: {:?}",
                 window.window_attributes.position,

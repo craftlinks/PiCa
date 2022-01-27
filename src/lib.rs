@@ -39,9 +39,9 @@ pub mod pica_window {
 
     const MAX_KEYS: usize = 256;
     const MAX_TEXT: usize = 256;
-    const ALT: u8 = 0x12;
-    const CTR: u8 = 0x11;
-    const SHIFT: u8 = 0x10;
+    pub const ALT: usize = 0x12;
+    pub const CTR: usize = 0x11;
+    pub const SHIFT: usize = 0x10;
 
     /// Window Attributes for creating a new PiCa window.
     #[derive(Debug)]
@@ -97,7 +97,7 @@ pub mod pica_window {
         pub mouse: Mouse,
         pub keys: [Button; 256],
         pub time: Time,
-        pub text: [u8; MAX_TEXT],
+        pub text: [char; MAX_TEXT],
         pub text_length: usize,
         quit: bool,
     }
@@ -208,7 +208,7 @@ pub mod pica_window {
                 mouse,
                 keys: [Button::default(); MAX_KEYS],
                 time: Time::new(),
-                text: [0; MAX_TEXT],
+                text: ['0'; MAX_TEXT],
                 text_length: 0,
                 quit: false,
             }));
@@ -258,7 +258,7 @@ pub mod pica_window {
 
         fn window_pull(&mut self) {
             
-            self.text[0] = 0;
+            self.text[0] = '0';
             self.text_length = 0;
             
             self.window_attributes.resized = false;
@@ -437,8 +437,8 @@ pub mod pica_window {
                             0 as *mut i32,
                         );
                         if ascii_length == 1 && pica_window.text_length + 1 < size_of::<[u8; MAX_TEXT]>() - 1 {
-                            pica_window.text[pica_window.text_length] = ascii_character;
-                            pica_window.text[pica_window.text_length + 1] = 0;
+                            pica_window.text[pica_window.text_length] = ascii_character as char;
+                            pica_window.text[pica_window.text_length + 1] = '0';
                             pica_window.text_length += ascii_length as usize; 
 
                         }
