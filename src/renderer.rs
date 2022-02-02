@@ -2,16 +2,19 @@ use std::ffi::c_void;
 use windows::{
     core::Interface,
     Win32::{
-        Foundation::HWND,
+        Foundation::{HANDLE, HWND, RECT},
         Graphics::{
             Direct3D::D3D_FEATURE_LEVEL_11_0,
             Direct3D12::{
-                D3D12CreateDevice, D3D12GetDebugInterface, ID3D12CommandAllocator,
-                ID3D12CommandQueue, ID3D12Debug, ID3D12DescriptorHeap, ID3D12Device, ID3D12Fence,
-                ID3D12GraphicsCommandList, ID3D12PipelineState, ID3D12Resource,
-                ID3D12RootSignature, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC,
-                D3D12_DESCRIPTOR_HEAP_DESC, D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-                D3D12_VERTEX_BUFFER_VIEW, D3D12_CPU_DESCRIPTOR_HANDLE,
+                D3D12CreateDevice, D3D12GetDebugInterface, D3D12SerializeRootSignature,
+                ID3D12CommandAllocator, ID3D12CommandQueue, ID3D12Debug, ID3D12DescriptorHeap,
+                ID3D12Device, ID3D12Fence, ID3D12GraphicsCommandList, ID3D12PipelineState,
+                ID3D12Resource, ID3D12RootSignature, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                D3D12_COMMAND_QUEUE_DESC, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_DESCRIPTOR_HEAP_DESC,
+                D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_MAX_DEPTH, D3D12_MIN_DEPTH,
+                D3D12_ROOT_SIGNATURE_DESC,
+                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
+                D3D12_VERTEX_BUFFER_VIEW, D3D12_VIEWPORT, D3D_ROOT_SIGNATURE_VERSION_1,
             },
             Dxgi::{
                 Common::{DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC},
@@ -113,61 +116,41 @@ impl D3D12Renderer {
         unreachable!("Unable to find DirectX12 compatible device!")
     }
 }
-
 #[derive(Debug)]
-pub struct D3D12Resources {
-    targets: [ID3D12Resource; NUM_RENDERTARGETS],
-    vertexBuffer: ID3D12Resource,
-    vertexBufferView: D3D12_VERTEX_BUFFER_VIEW,
+struct Resources {
+    command_queue: ID3D12CommandQueue,
+    swap_chain: IDXGISwapChain3,
+    frame_index: u32,
+    render_targets: [ID3D12Resource; FRAME_COUNT as usize],
+    rtv_heap: ID3D12DescriptorHeap,
+    rtv_descriptor_size: usize,
+    viewport: D3D12_VIEWPORT,
+    scissor_rect: RECT,
+    command_allocator: ID3D12CommandAllocator,
+    root_signature: ID3D12RootSignature,
+    pso: ID3D12PipelineState,
+    command_list: ID3D12GraphicsCommandList,
+
+    // we need to keep this around to keep the reference alive, even though
+    // nothing reads from it
+    #[allow(dead_code)]
+    vertex_buffer: ID3D12Resource,
+
+    vbv: D3D12_VERTEX_BUFFER_VIEW,
     fence: ID3D12Fence,
-    fenceEvent: *mut c_void,
-    fenceValue: u32,
-    frameIndex: usize,
-    camera: Camera,
+    fence_value: u64,
+    fence_event: HANDLE,
 }
 
-impl Default for D3D12Resources {
-    fn default() -> Self {
-        unsafe { ::core::mem::zeroed() }
-    }
-}
-
-#[derive(Debug)]
-struct Camera {
-    pos: Vec3f,
-    dir: Vec3f,
-}
-
-struct Vertex {
-    pos: Vec3f,
-    col: Vec4f,
-}
-
-#[derive(Debug)]
-struct Vec3f(f32, f32, f32);
-
-#[derive(Debug)]
-struct Vec4f(f32, f32, f32, f32);
-
-#[derive(Debug)]
-pub struct D3D12 {
-    renderer: D3D12Renderer,
-    resources: Option<D3D12Resources>,
-}
-
-impl D3D12 {
-    pub fn new() -> Result<Self> {
-        let renderer = D3D12Renderer::new()?;
-        Ok(Self {
-            renderer,
-            resources: None,
-        })
-    }
-
-    pub fn bind_to_window(&mut self, win32_window_handle: HWND, size: (i32, i32)) -> Result<()> {
+impl Resources {
+    pub fn new(
+        renderer: &mut D3D12Renderer,
+        win32_window_handle: HWND,
+        size: (i32, i32),
+    ) -> Result<Self> {
         // Create a command buffer (queue) that the GPU can execute.
         let command_queue: ID3D12CommandQueue = unsafe {
-            self.renderer
+            renderer
                 .device
                 .CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC {
                     Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -197,7 +180,7 @@ impl D3D12 {
         };
 
         let swap_chain: IDXGISwapChain3 = unsafe {
-            self.renderer
+            renderer
                 .factory
                 .CreateSwapChainForHwnd(
                     &command_queue,
@@ -214,7 +197,7 @@ impl D3D12 {
         // TODO: Geert: Make the application support full-screen transitions (via ALT + ENTER?)
         // reference: https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgifactory-makewindowassociation
         unsafe {
-            self.renderer
+            renderer
                 .factory
                 .MakeWindowAssociation(win32_window_handle, DXGI_MWA_NO_ALT_ENTER)
                 .map_err(|e| Error::Win32Error(win_error!(e)))?;
@@ -224,7 +207,7 @@ impl D3D12 {
 
         // Describe and create a render target view (RTV) descriptor heap.
         let rtv_heap: ID3D12DescriptorHeap = unsafe {
-            self.renderer
+            renderer
                 .device
                 .CreateDescriptorHeap(&D3D12_DESCRIPTOR_HEAP_DESC {
                     NumDescriptors: FRAME_COUNT,
@@ -236,21 +219,22 @@ impl D3D12 {
 
         // used to increment a handle into our rtv descriptor heap array by the correct amount.
         let rtv_descriptor_size = unsafe {
-            self.renderer.device
+            renderer
+                .device
                 .GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
         } as usize;
-           
+
         // Returns the CPU descriptor handle that represents the start of our rtv descriptor heap.
         let rtv_handle = unsafe { rtv_heap.GetCPUDescriptorHandleForHeapStart() };
 
-        
         // Initialize all render targets (2 in this case) and store in an array.
         // Uses the array-init crate. (https://docs.rs/array-init/latest/array_init/)
         let render_targets: [ID3D12Resource; FRAME_COUNT as usize] =
             array_init::try_array_init(|i: usize| -> Result<ID3D12Resource> {
-                let render_target: ID3D12Resource = unsafe { swap_chain.GetBuffer(i as u32) }.map_err(|e| Error::Win32Error(win_error!(e)))?;
+                let render_target: ID3D12Resource = unsafe { swap_chain.GetBuffer(i as u32) }
+                    .map_err(|e| Error::Win32Error(win_error!(e)))?;
                 unsafe {
-                    self.renderer.device.CreateRenderTargetView(
+                    renderer.device.CreateRenderTargetView(
                         &render_target,
                         std::ptr::null_mut(),
                         &D3D12_CPU_DESCRIPTOR_HANDLE {
@@ -261,7 +245,111 @@ impl D3D12 {
                 Ok(render_target)
             })?;
 
-        // TODO: Geert: Continue configuring resources...
+        let viewport = D3D12_VIEWPORT {
+            TopLeftX: 0.0,
+            TopLeftY: 0.0,
+            Width: width as f32,
+            Height: height as f32,
+            MinDepth: D3D12_MIN_DEPTH,
+            MaxDepth: D3D12_MAX_DEPTH,
+        };
+
+        let scissor_rect = RECT {
+            left: 0,
+            top: 0,
+            right: width,
+            bottom: height,
+        };
+
+        let command_allocator: ID3D12CommandAllocator = unsafe {
+            renderer
+                .device
+                .CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)
+        }
+        .map_err(|e| Error::Win32Error(win_error!(e)))?;
+
+        let root_signature = Resources::create_root_signature(&renderer.device)?;
+
+        // TODO: Geert continue implementation from here...
+        let pso = Resources::create_pipeline_state(&renderer.device, &root_signature)?;
+
+        todo!()
+
+    }
+
+    fn create_root_signature(device: &ID3D12Device) -> Result<ID3D12RootSignature> {
+        // Describes the layout of a root signature.
+        // Opting in to using the Input Assembler (requiring an input layout that defines a set of vertex buffer bindings).
+        let desc = D3D12_ROOT_SIGNATURE_DESC {
+            Flags: D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
+            ..Default::default()
+        };
+
+        // Serializes a root signature that can be passed to ID3D12Device::CreateRootSignature.
+        let mut signature = None;
+        let signature = unsafe {
+            D3D12SerializeRootSignature(
+                &desc,
+                D3D_ROOT_SIGNATURE_VERSION_1,
+                &mut signature,
+                std::ptr::null_mut(),
+            )
+        }
+        .map(|()| signature.unwrap())
+        .map_err(|e| Error::Win32Error(win_error!(e)))?;
+
+        unsafe {
+            device
+                .CreateRootSignature::<ID3D12RootSignature>(
+                    0,
+                    signature.GetBufferPointer(),
+                    signature.GetBufferSize(),
+                )
+                .map_err(|e| Error::Win32Error(win_error!(e)))
+        }
+    }
+
+    fn create_pipeline_state(device: &ID3D12Device, root_signature: &ID3D12RootSignature) -> Result<ID3D12PipelineState> {
+        todo!()
+    }
+
+}
+
+#[derive(Debug)]
+struct Camera {
+    pos: Vec3f,
+    dir: Vec3f,
+}
+
+struct Vertex {
+    pos: Vec3f,
+    col: Vec4f,
+}
+
+#[derive(Debug)]
+struct Vec3f(f32, f32, f32);
+
+#[derive(Debug)]
+struct Vec4f(f32, f32, f32, f32);
+
+#[derive(Debug)]
+pub struct D3D12 {
+    renderer: D3D12Renderer,
+    resources: Option<Resources>,
+}
+
+impl D3D12 {
+    pub fn new() -> Result<Self> {
+        let renderer = D3D12Renderer::new()?;
+        Ok(Self {
+            renderer,
+            resources: None,
+        })
+    }
+
+    pub fn create_resources(&mut self, win32_window_handle: HWND, size: (i32, i32)) -> Result<()> {
+        let resources = Resources::new(&mut self.renderer, win32_window_handle, size).ok();
+        self.resources = resources;
 
         Ok(())
     }
