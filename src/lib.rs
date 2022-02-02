@@ -209,8 +209,12 @@ pub mod pica_window {
             }
 
             let mouse = Mouse::new(win32_window_handle)?;
-            let d3d12 = D3D12::new(win32_window_handle)?;
+            
+            // Direct3D12 Initialization
+            let mut d3d12 = D3D12::new()?;
+            d3d12.bind_to_window(win32_window_handle, window_attributes.size)?;
 
+            // Create PiCa window struct
             let mut pica_window = Box::into_raw(Box::new(Self {
                 window_attributes,
                 win32: Win32 {
@@ -627,6 +631,7 @@ pub mod error {
     }
 
     #[allow(unused_macros)]
+    #[macro_export]
     macro_rules! win_error {
         ($error:expr) => {
             crate::error::Win32Error::new(line!(), file!(), $error)
@@ -642,7 +647,7 @@ pub mod error {
         }
     }
 
-    impl error::Error for Win32Error {}
+    // impl error::Error for Win32Error {}
 }
 
 /// Some common utilities.
