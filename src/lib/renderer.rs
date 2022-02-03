@@ -4,7 +4,7 @@ use windows::{
     Win32::{
         Foundation::{HANDLE, HWND, RECT},
         Graphics::{
-            Direct3D::D3D_FEATURE_LEVEL_11_0,
+            Direct3D::{D3D_FEATURE_LEVEL_11_0, Fxc::{D3DCOMPILE_DEBUG, D3DCOMPILE_SKIP_OPTIMIZATION}},
             Direct3D12::{
                 D3D12CreateDevice, D3D12GetDebugInterface, D3D12SerializeRootSignature,
                 ID3D12CommandAllocator, ID3D12CommandQueue, ID3D12Debug, ID3D12DescriptorHeap,
@@ -117,7 +117,7 @@ impl D3D12Renderer {
     }
 }
 #[derive(Debug)]
-struct Resources {
+pub(crate) struct Resources {
     command_queue: ID3D12CommandQueue,
     swap_chain: IDXGISwapChain3,
     frame_index: u32,
@@ -309,10 +309,23 @@ impl Resources {
         }
     }
 
-    fn create_pipeline_state(device: &ID3D12Device, root_signature: &ID3D12RootSignature) -> Result<ID3D12PipelineState> {
+    fn create_pipeline_state(
+        device: &ID3D12Device,
+        root_signature: &ID3D12RootSignature,
+    ) -> Result<ID3D12PipelineState> {
+        let compile_flags = if cfg!(debug_assertions) {
+            D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION
+        } else {
+            0
+        };
+
+        let exe_path = std::env::current_exe().ok().unwrap();
+        let asset_path = exe_path.parent().unwrap();
+        let shaders_hlsl_path = asset_path.join("shaders.hlsl");
+        let shaders_hlsl = shaders_hlsl_path.to_str().unwrap();
+        
         todo!()
     }
-
 }
 
 #[derive(Debug)]

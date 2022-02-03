@@ -5,6 +5,17 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+
+[lib]
+name = 'PiCa'
+path = "src/lib/lib.rs"
+
+
+[[bin]]
+name = "hello-triangle"
+path = "src/bin/hello_triangle.rs"
+
+
 [dependencies]
 raw-window-handle = "0.4"
 array-init = "2.0.0"
@@ -26,4 +37,5 @@ features = [
      "Win32_Graphics_Direct3D",
      "Win32_Graphics_Dxgi",
      "Win32_Graphics_Dxgi_Common",
+     "Win32_Graphics_Direct3D_Fxc",
 ]
