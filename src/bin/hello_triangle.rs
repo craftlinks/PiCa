@@ -8,7 +8,7 @@ pub fn main() -> Result<(), Error> {
     let window_attributes = WindowAttributes::new()
         .with_title("Awesome PiCa Simulation")
         .with_position(50, 50)
-        .with_size(800, 600);
+        .with_size(800, 800);
 
     let mut window = Window::new_with_attributes(window_attributes)?;
     let mut last_print_time: f32 = 0.0;

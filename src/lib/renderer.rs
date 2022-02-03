@@ -54,7 +54,6 @@ pub use crate::{
 };
 pub type Result<T> = std::result::Result<T, crate::error::Error>;
 
-const NUM_RENDERTARGETS: usize = 2;
 const FRAME_COUNT: u32 = 2;
 
 #[derive(Debug)]
@@ -98,6 +97,7 @@ impl D3D12Renderer {
             device: device.unwrap(),
         })
     }
+    
     /// Find and return a DX12 compatible GPU
     fn get_hardware_adapter(factory: &IDXGIFactory4) -> Result<IDXGIAdapter1> {
         for i in 0.. {
