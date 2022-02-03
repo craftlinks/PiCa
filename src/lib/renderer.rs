@@ -1,4 +1,4 @@
-use std::ffi::c_void;
+use std::{ffi::c_void, env, path::PathBuf};
 use windows::{
     core::Interface,
     Win32::{
@@ -319,9 +319,20 @@ impl Resources {
             0
         };
 
+        // Loading a shader file (.hlsl)
         let exe_path = std::env::current_exe().ok().unwrap();
         let asset_path = exe_path.parent().unwrap();
-        let shaders_hlsl_path = asset_path.join("shaders.hlsl");
+        let mut shaders_hlsl_path = asset_path.join("shaders.hlsl");
+        if let Some(hlsl_file_name) = env::args().skip(1).next() {
+            let potential_hlsl_path = asset_path.join(&hlsl_file_name);
+            if potential_hlsl_path.is_file() {
+                println!("Shader file: {}", hlsl_file_name);
+                shaders_hlsl_path = potential_hlsl_path;
+            }
+            else {
+                println!("{}, is not a file.", hlsl_file_name);
+            }
+        }
         let shaders_hlsl = shaders_hlsl_path.to_str().unwrap();
         
         todo!()
