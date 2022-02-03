@@ -69,6 +69,9 @@ pub fn main() -> Result<(), Error> {
             );
             last_print_time = window.time.seconds;
         }
+
+        // Win32 DirectX12 Rendering!
+        window.push();
     }
     Ok(())
 }

@@ -353,6 +353,10 @@ pub mod pica_window {
             self.mouse.position.1 = mouse_position.y;
         }
 
+        pub fn push(&mut self) {
+            self.d3d12.render();
+        }
+
         // Win32 message handling
         extern "system" fn wndproc(
             window_handle: HWND,
