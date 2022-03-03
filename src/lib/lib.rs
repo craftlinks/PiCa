@@ -1,3 +1,4 @@
+pub mod math;
 pub mod renderer;
 
 /// Module for creating and managing a PiCa window
