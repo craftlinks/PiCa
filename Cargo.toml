@@ -12,8 +12,12 @@ path = "src/lib/lib.rs"
 
 
 [[bin]]
-name = "hello-triangle"
-path = "src/bin/hello_triangle.rs"
+name = "dx12-triangle"
+path = "src/bin/dx12_triangle.rs"
+
+[[bin]]
+name = "wgpu-triangle"
+path = "src/bin/wgpu_triangle.rs"
 
 
 [dependencies]

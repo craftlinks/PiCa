@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use PiCa::dx12_renderer::D3D12;
 use PiCa::error::Error;
 use PiCa::pica_mouse::{Button, Mouse};
 use PiCa::pica_window::{Window, WindowAttributes, ALT, CTR, SHIFT};
@@ -11,6 +12,12 @@ pub fn main() -> Result<(), Error> {
         .with_size(800, 800);
 
     let mut window = Window::new_with_attributes(window_attributes)?;
+
+    // Direct3D12 Initialization
+    let mut d3d12 = D3D12::new()?;
+    d3d12.create_resources(window.win32.win32_window_handle, window.window_attributes.size)?;
+
+
     let mut last_print_time: f32 = 0.0;
     while window.pull() {
         match window.mouse {
@@ -72,6 +79,7 @@ pub fn main() -> Result<(), Error> {
 
         // Win32 DirectX12 Rendering!
         window.push();
+        d3d12.render();
     }
     Ok(())
 }
