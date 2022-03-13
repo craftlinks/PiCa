@@ -23,6 +23,7 @@ path = "src/bin/wgpu_triangle.rs"
 [dependencies]
 raw-window-handle = "0.4"
 array-init = "2.0.0"
+wgpu = "0.12.0"
 
 [dependencies.windows]
 version = "0.30.0"
