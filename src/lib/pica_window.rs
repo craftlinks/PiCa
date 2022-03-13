@@ -5,10 +5,10 @@ use crate::{
     utils::*,
 };
 use std::{ffi::c_void, mem::size_of};
-use windows::Win32::{
+use windows::{Win32::{
     Devices::HumanInterfaceDevice::MOUSE_MOVE_RELATIVE,
     Foundation::{
-        GetLastError, SetLastError, HWND, LPARAM, LRESULT, POINT, PSTR, PWSTR, RECT, WPARAM,
+        GetLastError, SetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM, WIN32_ERROR,
     },
     Globalization::{WideCharToMultiByte, CP_ACP},
     Graphics::Gdi::{ClientToScreen, GetDC, HDC},
@@ -32,7 +32,7 @@ use windows::Win32::{
             WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
         },
     },
-};
+}, core::{PCWSTR, PCSTR, PSTR}};
 
 /// Wrapper type around [`Error`]
 use crate::error::Error;
@@ -159,7 +159,7 @@ impl Window {
                 WNDCLASSW {
                     hCursor: LoadCursorW(None, IDC_CROSS),
                     hInstance: instance,
-                    lpszClassName: PWSTR(window_class_name),
+                    lpszClassName: PCWSTR(window_class_name),
 
                     style: CS_HREDRAW | CS_VREDRAW,
                     lpfnWndProc: Some(Self::wndproc),
@@ -177,8 +177,8 @@ impl Window {
         let win32_window_handle = unsafe {
             CreateWindowExW(
                 Default::default(),
-                PWSTR(window_class_name),
-                PWSTR((&window_attributes.title[..]).to_wide()),
+                PCWSTR(window_class_name),
+                PCWSTR((&window_attributes.title[..]).to_wide()),
                 WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                 window_position.0,
                 window_position.1,
@@ -191,7 +191,7 @@ impl Window {
             )
         };
         if win32_window_handle.0 == 0 {
-            println!("Failed to create window, with error code {}", unsafe {
+            println!("Failed to create window, with error code {:?}", unsafe {
                 GetLastError()
             })
         }
@@ -225,17 +225,17 @@ impl Window {
         }));
 
         unsafe {
-            SetLastError(0);
+            SetLastError(WIN32_ERROR(0));
             if SetWindowLongPtrW(
                 (*pica_window).win32.win32_window_handle,
                 GWLP_USERDATA,
                 pica_window as isize,
             ) == 0
-                && GetLastError() != 0
+                && GetLastError() != WIN32_ERROR(0)
             {
                 let error = GetLastError();
                 println!(
-                    "Error settting userdata for window handle {}, error code: {}",
+                    "Error settting userdata for window handle {}, error code: {:?}",
                     (*pica_window).win32.win32_window_handle.0,
                     error
                 );
@@ -305,7 +305,7 @@ impl Window {
         unsafe {
             if !QueryPerformanceCounter(&mut current_ticks).as_bool() {
                 let error = GetLastError();
-                println!("Error getting performance count: {}", error);
+                println!("Error getting performance count: {:?}", error);
             }
         }
 
@@ -380,7 +380,7 @@ impl Window {
                     ) == size
                     {
                         let raw_input: RAWINPUT = *(buffer.as_ptr().cast::<RAWINPUT>());
-                        if raw_input.header.dwType == RIM_TYPEMOUSE
+                        if raw_input.header.dwType == RIM_TYPEMOUSE.0
                             && raw_input.data.mouse.usFlags == MOUSE_MOVE_RELATIVE as u16
                         {
                             pica_window.mouse.delta_position.0 += raw_input.data.mouse.lLastX;
@@ -440,11 +440,11 @@ impl Window {
                     let ascii_length = WideCharToMultiByte(
                         CP_ACP,
                         0,
-                        PWSTR(&mut utf16_character),
+                        PCWSTR(&mut utf16_character),
                         1,
                         PSTR(&mut ascii_character),
                         1,
-                        PSTR(0 as *mut u8),
+                        PCSTR(0 as *mut u8),
                         0 as *mut i32,
                     );
                     if ascii_length == 1

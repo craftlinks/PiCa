@@ -42,7 +42,10 @@ pub mod pica_time {
 pub mod pica_mouse {
     use crate::error::Error;
     use std::mem::size_of;
-    use windows::Win32::{UI::Input::{RegisterRawInputDevices, RAWINPUTDEVICE}, Foundation::HWND};
+    use windows::Win32::{
+        Foundation::HWND,
+        UI::Input::{RegisterRawInputDevices, RAWINPUTDEVICE, RAWINPUTDEVICE_FLAGS},
+    };
     pub type Result<T> = std::result::Result<T, crate::error::Error>;
 
     #[derive(Debug, Default, Clone, Copy)]
@@ -72,12 +75,13 @@ pub mod pica_mouse {
     }
 
     impl Mouse {
+        // what is going on with this RAWINPUTDEVICE_FLAGS?? 
         pub fn new(win32_window_handle: HWND) -> Result<Self> {
             // TODO: Geert: You will need to Box this for sure!!
             let raw_input_device = Box::into_raw(Box::new(RAWINPUTDEVICE {
                 usUsagePage: 0x01,
                 usUsage: 0x02,
-                dwFlags: 0,
+                dwFlags: RAWINPUTDEVICE_FLAGS(0),
                 hwndTarget: win32_window_handle,
             }));
             if unsafe {

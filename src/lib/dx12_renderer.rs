@@ -1,8 +1,8 @@
 use std::{env, ffi::c_void, path::PathBuf};
 use windows::{
-    core::Interface,
+    core::{Interface, PCWSTR, PCSTR},
     Win32::{
-        Foundation::{HANDLE, HWND, PSTR, PWSTR, RECT},
+        Foundation::{HANDLE, HWND, RECT},
         Graphics::{
             Direct3D::{
                 Fxc::{D3DCompileFromFile, D3DCOMPILE_DEBUG, D3DCOMPILE_SKIP_OPTIMIZATION},
@@ -113,7 +113,7 @@ impl D3D12Renderer {
                     .map_err(|e| Error::Win32Error(win_error!(e)))?
             };
 
-            if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != DXGI_ADAPTER_FLAG_NONE {
+            if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0) != DXGI_ADAPTER_FLAG_NONE.0 {
                 // Don't select the Basic Render Driver adapter. If you want a
                 // software adapter, pass in "/warp" on the command line.
                 continue;
@@ -411,11 +411,11 @@ impl Resources {
         let mut vertex_shader = None;
         let vertex_shader = unsafe {
             D3DCompileFromFile(
-                PWSTR(shaders_hlsl.to_wide()),
+                PCWSTR(shaders_hlsl.to_wide()),
                 std::ptr::null_mut(),
                 None,
-                PSTR(b"VSMain\0".as_ptr() as *mut u8),
-                PSTR(b"vs_5_0\0".as_ptr() as *mut u8),
+                PCSTR(b"VSMain\0".as_ptr() as *mut u8),
+                PCSTR(b"vs_5_0\0".as_ptr() as *mut u8),
                 compile_flags,
                 0,
                 &mut vertex_shader,
@@ -432,11 +432,11 @@ impl Resources {
         // Note Geert: 'D3DCompileFromFile is expected to just accept &str from v0.31.0'
         let pixel_shader = unsafe {
             D3DCompileFromFile(
-                PWSTR(shaders_hlsl.to_wide()),
+                PCWSTR(shaders_hlsl.to_wide()),
                 std::ptr::null_mut(),
                 None,
-                PSTR(b"PSMain\0".as_ptr() as *mut u8),
-                PSTR(b"ps_5_0\0".as_ptr() as *mut u8),
+                PCSTR(b"PSMain\0".as_ptr() as *mut u8),
+                PCSTR(b"ps_5_0\0".as_ptr() as *mut u8),
                 compile_flags,
                 0,
                 &mut pixel_shader,
@@ -450,7 +450,7 @@ impl Resources {
 
         let mut input_element_descs: [D3D12_INPUT_ELEMENT_DESC; 2] = [
             D3D12_INPUT_ELEMENT_DESC {
-                SemanticName: PSTR(b"POSITION\0".as_ptr() as *mut u8),
+                SemanticName: PCSTR(b"POSITION\0".as_ptr() as *mut u8),
                 SemanticIndex: 0,
                 Format: DXGI_FORMAT_R32G32B32_FLOAT,
                 InputSlot: 0,
@@ -459,7 +459,7 @@ impl Resources {
                 InstanceDataStepRate: 0,
             },
             D3D12_INPUT_ELEMENT_DESC {
-                SemanticName: PSTR(b"COLOR\0".as_ptr() as *mut u8),
+                SemanticName: PCSTR(b"COLOR\0".as_ptr() as *mut u8),
                 SemanticIndex: 0,
                 Format: DXGI_FORMAT_R32G32B32_FLOAT,
                 InputSlot: 0,
@@ -502,7 +502,7 @@ impl Resources {
                         DestBlendAlpha: D3D12_BLEND_ZERO,
                         BlendOpAlpha: D3D12_BLEND_OP_ADD,
                         LogicOp: D3D12_LOGIC_OP_NOOP,
-                        RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL as u8,
+                        RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL.0 as u8,
                     },
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),
