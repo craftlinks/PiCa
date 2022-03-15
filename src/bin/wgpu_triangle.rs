@@ -1,5 +1,3 @@
-use std::fmt::format;
-use raw_window_handle::HasRawWindowHandle;
 use PiCa::error::Error;
 use PiCa::pica_window::{Window, WindowAttributes};
 use PiCa::wgpu_renderer::WGPURenderer;
