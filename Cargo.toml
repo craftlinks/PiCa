@@ -28,6 +28,10 @@ pollster = "*"
 env_logger = "*"
 log = "*"
 
+[[example]]
+name = "point_line"
+path = "examples/webgpu/primitives/point_line.rs"
+
 [dependencies.windows]
 version = "0.33.0"
 features = [
