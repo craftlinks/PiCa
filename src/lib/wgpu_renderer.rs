@@ -124,9 +124,9 @@ impl WGPURenderer {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.05,
-                            g: 0.062,
-                            b: 0.08,
+                            r: 0.03,
+                            g: 0.01,
+                            b: 0.1,
                             a: 1.0,
                         }),
                         store: true,

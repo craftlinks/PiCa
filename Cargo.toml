@@ -32,6 +32,10 @@ log = "*"
 name = "point_line"
 path = "examples/webgpu/primitives/point_line.rs"
 
+[[example]]
+name = "triangles"
+path = "examples/webgpu/primitives/triangles.rs"
+
 [dependencies.windows]
 version = "0.33.0"
 features = [
