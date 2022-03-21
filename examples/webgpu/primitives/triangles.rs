@@ -31,6 +31,8 @@ pub fn main() -> Result<(), Error> {
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../../../assets/triangles.wgsl"))),
         topology,
         strip_index_format,
+        vertices: None,
+        
     };
 
     let mut wgpu_renderer = pollster::block_on( WGPURenderer::wgpu_init(window.as_ref(), inputs));

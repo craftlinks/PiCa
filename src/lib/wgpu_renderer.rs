@@ -1,28 +1,25 @@
-use std::borrow::Cow;
-
-use wgpu::{ShaderSource, PrimitiveTopology, IndexFormat};
 use crate::pica_window::Window;
+use wgpu::{IndexFormat, PrimitiveTopology, ShaderSource, util::DeviceExt};
 
 pub struct Inputs<'a> {
     pub source: ShaderSource<'a>,
     pub topology: PrimitiveTopology,
     pub strip_index_format: Option<IndexFormat>,
+    pub vertices: Option<&'a[Vertex]>
 }
 
 pub struct WGPURenderer {
     pub device: wgpu::Device,
     pub surface: wgpu::Surface,
-    pub texture_format: wgpu::TextureFormat,
     pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
     pub shader: wgpu::ShaderModule,
     pub render_pipeline: wgpu::RenderPipeline,
+    pub vertex_buffer: Option<wgpu::Buffer>,
 }
 
 impl WGPURenderer {
-    pub async fn wgpu_init(
-        window: &Window,
-        inputs: Inputs<'_>,
-    ) -> WGPURenderer {
+    pub async fn wgpu_init(window: &Window, inputs: Inputs<'_>) -> WGPURenderer {
         let size = window.window_attributes.size;
         let instance = wgpu::Instance::new(wgpu::Backends::DX12);
         let surface = unsafe { instance.create_surface(window) };
@@ -45,10 +42,9 @@ impl WGPURenderer {
             )
             .await
             .expect("Failed to create device");
-        let texture_format = surface.get_preferred_format(&adapter).unwrap();
-        let mut config = wgpu::SurfaceConfiguration {
+        let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: texture_format,
+            format: surface.get_preferred_format(&adapter).unwrap(),
             width: size.0 as u32,
             height: size.1 as u32,
             present_mode: wgpu::PresentMode::Mailbox,
@@ -57,51 +53,67 @@ impl WGPURenderer {
 
         // Load the shaders from disk
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
+            label: Some("Shader"),
             source: inputs.source,
         });
 
         // WGPU application dependent code
-        let pipeline_layout =
-            device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: None,
-                    bind_group_layouts: &[], // placeholder, vertext and color data are written directly in the shader
-                    push_constant_ranges: &[],
-                });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[], // placeholder, vertext and color data are written directly in the shader
+            push_constant_ranges: &[],
+        });
 
-        let render_pipeline =
-            device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: None,
-                    layout: Some(&pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: "vs_main",
-                        buffers: &[],
-                    },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: "fs_main",
-                        targets: &[texture_format.into()],
-                    }),
-                    primitive: wgpu::PrimitiveState{
-                        topology: inputs.topology,
-                        strip_index_format: inputs.strip_index_format,
-                        ..Default::default()
-                    },
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                });
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[Vertex::desc()],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[
+                    wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent::REPLACE,
+                            alpha: wgpu::BlendComponent::REPLACE,
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }
+                ],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: inputs.topology,
+                strip_index_format: inputs.strip_index_format,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+        });
 
-        let wgpu_renderer = WGPURenderer{
+        let mut vertex_buffer = None;
+        if let Some(vertices) = inputs.vertices {
+            vertex_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: crate::utils::as_bytes(vertices), // Everybody uses the Bytemuck crate here
+                usage: wgpu::BufferUsages::VERTEX,
+            }));
+        }
+        
+
+        let wgpu_renderer = WGPURenderer {
             device,
             surface,
-            texture_format,
             queue,
             shader,
             render_pipeline,
+            config,
+            vertex_buffer: vertex_buffer,
         };
 
         wgpu_renderer
@@ -118,7 +130,7 @@ impl WGPURenderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
+                label: Some("Render Pass"),
                 color_attachments: &[wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -135,9 +147,41 @@ impl WGPURenderer {
                 depth_stencil_attachment: None,
             });
             rpass.set_pipeline(&self.render_pipeline);
+            
+            if let Some(vertex_buffer) = &self.vertex_buffer {
+                rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            }
+            
             rpass.draw(0..num_vertices as u32, 0..1);
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();
+    }
 }
+
+#[repr(C)]
+pub struct Vertex {
+    pub position: [f32; 2],
+    pub color: [f32; 3],
+}
+
+impl Vertex {
+    fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x2,
+                    offset: 0,
+                    shader_location: 0,
+                },
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x3,
+                    offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                },
+            ],
+        }
+    }
 }

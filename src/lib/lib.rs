@@ -1,8 +1,7 @@
-pub mod pica_window;
-pub mod math;
 pub mod dx12_renderer;
+pub mod math;
+pub mod pica_window;
 pub mod wgpu_renderer;
-
 
 pub mod pica_time {
     use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
@@ -75,7 +74,7 @@ pub mod pica_mouse {
     }
 
     impl Mouse {
-        // what is going on with this RAWINPUTDEVICE_FLAGS?? 
+        // what is going on with this RAWINPUTDEVICE_FLAGS??
         pub fn new(win32_window_handle: HWND) -> Result<Self> {
             // TODO: Geert: You will need to Box this for sure!!
             let raw_input_device = Box::into_raw(Box::new(RAWINPUTDEVICE {
@@ -160,5 +159,10 @@ pub mod utils {
             result.push(0);
             result.as_ptr() as *mut u16
         }
+    }
+
+    pub fn as_bytes<T: ?Sized>(content: &T) -> &[u8] {
+        let new_len = core::mem::size_of_val(content) / std::mem::size_of::<u8>();
+        unsafe { core::slice::from_raw_parts(content as *const T as *const u8, new_len) }
     }
 }

@@ -21,6 +21,7 @@ pub fn main() -> Result<(), Error> {
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../../assets/shader.wgsl"))),
         topology: wgpu::PrimitiveTopology::TriangleList,
         strip_index_format: None,
+        vertices: None,
     };
 
     // WGPURenderer initialization
