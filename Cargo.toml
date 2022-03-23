@@ -19,6 +19,10 @@ path = "src/bin/dx12_triangle.rs"
 name = "wgpu-triangle"
 path = "src/bin/wgpu_triangle.rs"
 
+[[bin]]
+name = "glam"
+path = "src/bin/glam.rs"
+
 
 [dependencies]
 raw-window-handle = "0.4"
@@ -27,22 +31,7 @@ wgpu = "0.12.0"
 pollster = "*"
 env_logger = "*"
 log = "*"
-
-[[example]]
-name = "point_line"
-path = "examples/webgpu/primitives/point_line.rs"
-
-[[example]]
-name = "triangles"
-path = "examples/webgpu/primitives/triangles.rs"
-
-[[example]]
-name = "buffer_triangle"
-path = "examples/webgpu/gpu_buffers/buffer_triangle.rs"
-
-[[example]]
-name = "square_index"
-path = "examples/webgpu/gpu_buffers/square_index.rs"
+glam = '*'
 
 [dependencies.windows]
 version = "0.33.0"
@@ -65,3 +54,19 @@ features = [
      "Win32_Security",
      "Win32_System_WindowsProgramming",
 ]
+
+[[example]]
+name = "point_line"
+path = "examples/webgpu/primitives/point_line.rs"
+
+[[example]]
+name = "triangles"
+path = "examples/webgpu/primitives/triangles.rs"
+
+[[example]]
+name = "buffer_triangle"
+path = "examples/webgpu/gpu_buffers/buffer_triangle.rs"
+
+[[example]]
+name = "square_index"
+path = "examples/webgpu/gpu_buffers/square_index.rs"
