@@ -40,6 +40,10 @@ path = "examples/webgpu/primitives/triangles.rs"
 name = "buffer_triangle"
 path = "examples/webgpu/gpu_buffers/buffer_triangle.rs"
 
+[[example]]
+name = "square_index"
+path = "examples/webgpu/gpu_buffers/square_index.rs"
+
 [dependencies.windows]
 version = "0.33.0"
 features = [

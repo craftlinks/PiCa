@@ -22,6 +22,7 @@ pub fn main() -> Result<(), Error> {
         topology: wgpu::PrimitiveTopology::TriangleList,
         strip_index_format: None,
         vertices: None,
+        indices: None,
     };
 
     // WGPURenderer initialization
@@ -32,7 +33,7 @@ pub fn main() -> Result<(), Error> {
         window.push();
         
         // Paint to the window surface
-        wgpu_renderer.render(3);
+        wgpu_renderer.render();
     }
 
     // All was well

@@ -35,6 +35,7 @@ pub fn main() -> Result<(), Error> {
         topology,
         strip_index_format,
         vertices: None,
+        indices: None,
     };
 
     let mut wgpu_renderer = pollster::block_on( WGPURenderer::wgpu_init(window.as_ref(), inputs));
@@ -44,7 +45,7 @@ pub fn main() -> Result<(), Error> {
         window.push();
         
         //TODO: create a PiCa renderer trait, so this can be hidden behind the 'push()' function call
-        wgpu_renderer.render(6);
+        wgpu_renderer.render();
     }
 
     Ok(())

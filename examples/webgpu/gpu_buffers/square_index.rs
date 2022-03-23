@@ -1,23 +1,32 @@
+use std::borrow::Cow;
 use PiCa::error::Error;
 use PiCa::pica_window::{Window, WindowAttributes};
-use PiCa::wgpu_renderer::{WGPURenderer, Vertex};
-use std::borrow::Cow;
+use PiCa::wgpu_renderer::{Vertex, WGPURenderer};
 
 const VERTICES: &[Vertex] = &[
     Vertex {
-        position: [0.0, 0.5],
+        // vertex a, index 0
+        position: [-0.5, -0.5],
         color: [1.0, 0.0, 0.0],
     },
     Vertex {
-        position: [-0.5, -0.5],
+        // vertex b, index 1
+        position: [0.5, -0.5],
         color: [0.0, 1.0, 0.0],
     },
-    Vertex {
-        position: [0.5, -0.5],
+        Vertex {
+        // vertex c, index 2
+        position: [0.5, 0.5],
         color: [0.0, 0.0, 1.0],
+    },
+    Vertex {
+        // vertex d, index 3
+        position: [-0.5, 0.5],
+        color: [1.0, 1.0, 0.0],
     },
 ];
 
+const INDICES: &[u16] = &[0,1,3,3,1,2];
 pub fn main() -> Result<(), Error> {
     let window_attributes = WindowAttributes::new()
         .with_title("GPU Buffer - Triangle")
@@ -33,7 +42,7 @@ pub fn main() -> Result<(), Error> {
         topology: wgpu::PrimitiveTopology::TriangleList,
         strip_index_format: None,
         vertices: Some(VERTICES),
-        indices: None,
+        indices: Some(INDICES),
     };
 
     let mut wgpu_renderer = pollster::block_on(WGPURenderer::wgpu_init(window.as_ref(), inputs));

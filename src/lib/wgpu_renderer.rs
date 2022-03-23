@@ -5,7 +5,8 @@ pub struct Inputs<'a> {
     pub source: ShaderSource<'a>,
     pub topology: PrimitiveTopology,
     pub strip_index_format: Option<IndexFormat>,
-    pub vertices: Option<&'a[Vertex]>
+    pub vertices: Option<&'a[Vertex]>,
+    pub indices: Option<&'a[u16]>
 }
 
 pub struct WGPURenderer {
@@ -16,6 +17,9 @@ pub struct WGPURenderer {
     pub shader: wgpu::ShaderModule,
     pub render_pipeline: wgpu::RenderPipeline,
     pub vertex_buffer: Option<wgpu::Buffer>,
+    pub vertices_len: usize,
+    pub index_buffer: Option<wgpu::Buffer>,
+    pub indices_len: usize,
 }
 
 impl WGPURenderer {
@@ -64,6 +68,8 @@ impl WGPURenderer {
             push_constant_ranges: &[],
         });
 
+
+        
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&pipeline_layout),
@@ -97,14 +103,27 @@ impl WGPURenderer {
         });
 
         let mut vertex_buffer = None;
+        let mut vertices_len:usize = 9;
         if let Some(vertices) = inputs.vertices {
             vertex_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
                 contents: crate::utils::as_bytes(vertices), // Everybody uses the Bytemuck crate here
                 usage: wgpu::BufferUsages::VERTEX,
             }));
+            vertices_len = vertices.len();
         }
+
+        let mut index_buffer = None;
+        let mut indices_len = 0;
         
+        if let Some(indices) = inputs.indices {
+            index_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: crate::utils::as_bytes(indices),
+                usage: wgpu::BufferUsages::INDEX,
+            }));
+            indices_len = indices.len();
+        }
 
         let wgpu_renderer = WGPURenderer {
             device,
@@ -113,13 +132,16 @@ impl WGPURenderer {
             shader,
             render_pipeline,
             config,
-            vertex_buffer: vertex_buffer,
+            vertex_buffer,
+            vertices_len,
+            index_buffer,
+            indices_len,
         };
 
         wgpu_renderer
     }
 
-    pub fn render(&mut self, num_vertices: usize) {
+    pub fn render(&mut self) {
         // Later should just take a closure
         let frame = self.surface.get_current_texture().unwrap();
         let view = frame
@@ -127,9 +149,9 @@ impl WGPURenderer {
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Command Encoder") });
         {
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[wgpu::RenderPassColorAttachment {
                     view: &view,
@@ -146,13 +168,19 @@ impl WGPURenderer {
                 }],
                 depth_stencil_attachment: None,
             });
-            rpass.set_pipeline(&self.render_pipeline);
+            render_pass.set_pipeline(&self.render_pipeline);
             
             if let Some(vertex_buffer) = &self.vertex_buffer {
-                rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            }
+            if let Some(index_buffer) = &self.index_buffer {
+                render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.indices_len as u32, 0, 0..1);
+            }
+            else {
+                render_pass.draw(0..self.vertices_len as u32, 0..1);
             }
             
-            rpass.draw(0..num_vertices as u32, 0..1);
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();
