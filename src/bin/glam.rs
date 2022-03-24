@@ -1,4 +1,6 @@
-use glam::{Mat4, Vec3, Vec4, Vec3A};
+use std::f32::consts::FRAC_PI_6;
+
+use glam::{Mat4, Vec3, Vec3A, Vec4};
 
 pub fn main() {
     // SCALING
@@ -51,19 +53,19 @@ pub fn main() {
     println!("ROTATION");
 
     // create rotation matrix around z axis by 20 degrees
-    let rot_mat_z = Mat4::from_rotation_z(
-        f32::to_radians(20.0),
+    let rot_mat_z = Mat4::from_rotation_z(f32::to_radians(20.0));
+
+    let rad_45 = f32::to_radians(45.0);
+
+    println!(
+        "rad_45: {} ; cos(rad_45): {} ; sin(rad_45): {}",
+        rad_45,
+        rad_45.cos(),
+        rad_45.sin()
     );
 
-    let rad_45 = f32::to_radians(45.0); 
-
-    println!("rad_45: {} ; cos(rad_45): {} ; sin(rad_45): {}", rad_45, rad_45.cos(), rad_45.sin());
-
-
     // get total rotation matrix after another rotation around the z axis by 25 degrees
-    let rot_mat =  rot_mat_z * Mat4::from_rotation_z(
-            f32::to_radians(25.0),
-        );
+    let rot_mat = rot_mat_z * Mat4::from_rotation_z(f32::to_radians(25.0));
 
     // get final rotated vector
     let rot_vec = rot_mat * my_vec;
@@ -78,13 +80,12 @@ pub fn main() {
         rot_vec
     );
 
-
     // TRANSFORMS
     println!("TRANSFORM");
-    pub fn create_transforms(translation:[f32; 3], rotation:[f32; 3], scaling:[f32; 3]) -> Mat4 {
+    pub fn create_transforms(translation: [f32; 3], rotation: [f32; 3], scaling: [f32; 3]) -> Mat4 {
         // create individual transformation matrices
-        let trans_mat = Mat4::from_translation(Vec3::new(translation[0],
-        translation[1], translation[2]));
+        let trans_mat =
+            Mat4::from_translation(Vec3::new(translation[0], translation[1], translation[2]));
         let rotate_mat_x = Mat4::from_rotation_x(f32::to_radians(rotation[0]));
         let rotate_mat_y = Mat4::from_rotation_y(f32::to_radians(rotation[1]));
         let rotate_mat_z = Mat4::from_rotation_z(f32::to_radians(rotation[2]));
@@ -92,11 +93,50 @@ pub fn main() {
         // combine all transformation matrices together to form a final transform matrix: model matrix
         let model_mat = trans_mat * rotate_mat_z * rotate_mat_y * rotate_mat_x * scale_mat;
         // return final model matrix
-        model_mat   
+        model_mat
     }
 
     let trans_mat = create_transforms([2.0, 3.0, 1.0], [20.0, 30.0, 45.0], [0.2, 0.5, 2.0]);
     let res = trans_mat * my_vec;
     println!("my_vec {} -> {}", my_vec, res);
+
+    // Viewing Transform
+    println!("VIEWING TRANSFORM");
+    // position of the viewer
+    let eye = Vec3::new(3.0, 4.0, 5.0);
+    //point the viewer is looking at
+    let center = Vec3::new(-3.0, -4.0, -5.0);
+    // vector pointing up
+    let up = Vec3::new(0.0, 1.0, 0.0);
+    // construct view matrix:
+    let view_mat = Mat4::look_at_rh(eye, center, up);
+    println!("\nposition of viewer: {:?}", eye);
+    println!("point the viewer is looking at: {:?}", center);
+    println!("up direction: {:?}", up);
+    println!("view matrix: {:?}\n ", view_mat);
+
+    // Perspective Projection
+    println!("VIEWING TRANSFORM");
+
+    // frustum and perspective parameters
+    let left = -3.0;
+    let right = 3.0;
+    let bottom = -5.0;
+    let top = 5.0;
+    let near = 1.0;
+    let far = 100.0;
+    let fovy = FRAC_PI_6;
+    let aspect = 1.5;
+    // construct the frustum matrix
+    // let frustum_mat = frustum(left, right, bottom, top, near, far);
+    // construct perspective projection matrix
+    let persp_mat = Mat4::perspective_rh(fovy, aspect, near, far);
+    // println!("\nfrustum matrix: {:?}\n ", frustum_mat);
+    println!("perspective matrix: {:?}\n ", persp_mat);
+
+    // construct orthographic projection matrix
+    let ortho_mat = Mat4::orthographic_rh(left, right, bottom, top, near, far);
+    println!("orthographic matrix: {:?}\n ", ortho_mat);
+
 
 }
