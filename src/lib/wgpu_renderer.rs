@@ -1,4 +1,5 @@
-use crate::pica_window::Window;
+use crate::{pica_window::Window, math};
+use glam::{Mat4, Vec3};
 use wgpu::{IndexFormat, PrimitiveTopology, ShaderSource, util::DeviceExt};
 
 pub struct Inputs<'a> {
@@ -20,6 +21,11 @@ pub struct WGPURenderer {
     pub vertices_len: usize,
     pub index_buffer: Option<wgpu::Buffer>,
     pub indices_len: usize,
+    pub uniform_buffer: wgpu::Buffer,
+    pub uniform_bind_group: wgpu::BindGroup,
+    pub model_mat: Mat4,
+    pub view_mat: Mat4,
+    pub project_mat: Mat4,
 }
 
 impl WGPURenderer {
@@ -51,7 +57,7 @@ impl WGPURenderer {
             format: surface.get_preferred_format(&adapter).unwrap(),
             width: size.0 as u32,
             height: size.1 as u32,
-            present_mode: wgpu::PresentMode::Mailbox,
+            present_mode: wgpu::PresentMode::Fifo,
         };
         surface.configure(&device, &config);
 
@@ -61,15 +67,60 @@ impl WGPURenderer {
             source: inputs.source,
         });
 
+        // uniform data
+        let camera_position = (1.5, 1.0, 3.0).into();
+        let look_direction = (0.0, 0.0, 0.0).into();
+        let up_direction = Vec3::Y;
+        let model_mat = math::create_transforms([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+        let vp_matrix = math::create_view_projection(
+            camera_position,
+            look_direction,
+            up_direction,
+            size.0 as f32 / size.1 as f32,
+            math::ProjectionType::PERSPECTIVE,
+        );
+        let mvp_mat = vp_matrix.view_project_mat * model_mat;
+        let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
+        let uniform_buffer = device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Uniform Buffer"),
+                contents: crate::utils::as_bytes(mvp_ref),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+        let uniform_bind_group_layout =
+            device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                    label: Some("Uniform Bind Group Layout"),
+                });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+            label: Some("Uniform Bind Group"),
+        });
+
+        
+
         // WGPU application dependent code
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[], // placeholder, vertext and color data are written directly in the shader
+            bind_group_layouts: &[&uniform_bind_group_layout], // placeholder, vertext and color data are written directly in the shader
             push_constant_ranges: &[],
         });
 
-
-        
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&pipeline_layout),
@@ -136,6 +187,11 @@ impl WGPURenderer {
             vertices_len,
             index_buffer,
             indices_len,
+            uniform_buffer,
+            uniform_bind_group,
+            model_mat,
+            view_mat: vp_matrix.view_mat,
+            project_mat: vp_matrix.project_mat,
         };
 
         wgpu_renderer
@@ -178,6 +234,7 @@ impl WGPURenderer {
                 render_pass.draw_indexed(0..self.indices_len as u32, 0, 0..1);
             }
             else {
+                render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
                 render_pass.draw(0..self.vertices_len as u32, 0..1);
             }
             
@@ -188,28 +245,18 @@ impl WGPURenderer {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Vertex {
-    pub position: [f32; 2],
-    pub color: [f32; 3],
+    pub position: [f32; 3],
 }
 
 impl Vertex {
+    const ATTRIBUTES: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr_array![0=>Float32x3];
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                },
-            ],
+            attributes: &Self::ATTRIBUTES,
         }
     }
 }

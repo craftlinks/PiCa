@@ -70,3 +70,7 @@ path = "examples/webgpu/gpu_buffers/buffer_triangle.rs"
 [[example]]
 name = "square_index"
 path = "examples/webgpu/gpu_buffers/square_index.rs"
+
+[[example]]
+name = "line3d"
+path = "examples/webgpu/uniform_buffers/line3d.rs"
