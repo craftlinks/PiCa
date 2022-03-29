@@ -1,6 +1,6 @@
 use std::{env, ffi::c_void, path::PathBuf};
 use windows::{
-    core::{Interface, PCWSTR, PCSTR},
+    core::{Interface, PCSTR, PCWSTR},
     Win32::{
         Foundation::{HANDLE, HWND, RECT},
         Graphics::{
@@ -43,7 +43,10 @@ use windows::{
                 DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT,
             },
         },
-        System::{Threading::{CreateEventA, WaitForSingleObject}, WindowsProgramming::INFINITE},
+        System::{
+            Threading::{CreateEventA, WaitForSingleObject},
+            WindowsProgramming::INFINITE,
+        },
     },
 };
 
@@ -97,7 +100,7 @@ impl D3D12Renderer {
             device: device.unwrap(),
         })
     }
-    
+
     /// Find and return a DX12 compatible GPU
     fn get_hardware_adapter(factory: &IDXGIFactory4) -> Result<IDXGIAdapter1> {
         for i in 0.. {
@@ -373,8 +376,10 @@ impl Resources {
             device
                 .CreateRootSignature::<ID3D12RootSignature>(
                     0,
-                    signature.GetBufferPointer(),
-                    signature.GetBufferSize(),
+                    std::slice::from_raw_parts(
+                        signature.GetBufferPointer() as *const u8,
+                        signature.GetBufferSize(),
+                    ),
                 )
                 .map_err(|e| Error::Win32Error(win_error!(e)))
         }
@@ -650,7 +655,6 @@ impl D3D12 {
 
     pub fn render(&mut self) {
         if let Some(resources) = &mut self.resources {
-            
             // Poluplate command list in Resources struct.
             D3D12::populate_command_list(resources).unwrap();
 
@@ -659,7 +663,7 @@ impl D3D12 {
             unsafe {
                 resources
                     .command_queue
-                    .ExecuteCommandLists(1, &Some(command_list))
+                    .ExecuteCommandLists(&[Some(command_list)])
             };
 
             // Present the frame.
@@ -695,8 +699,8 @@ impl D3D12 {
         // Set necessary state.
         unsafe {
             command_list.SetGraphicsRootSignature(&resources.root_signature);
-            command_list.RSSetViewports(1, &resources.viewport);
-            command_list.RSSetScissorRects(1, &resources.scissor_rect);
+            command_list.RSSetViewports(&[resources.viewport]);
+            command_list.RSSetScissorRects(&[resources.scissor_rect]);
         }
 
         // Indicate that the back buffer will be used as a render target.
@@ -707,7 +711,7 @@ impl D3D12 {
         );
 
         // Notifies the driver that it needs to synchronize multiple accesses to resources.
-        unsafe { command_list.ResourceBarrier(1, &barrier) };
+        unsafe { command_list.ResourceBarrier(&[barrier]) };
 
         let rtv_handle = D3D12_CPU_DESCRIPTOR_HANDLE {
             ptr: unsafe { resources.rtv_heap.GetCPUDescriptorHandleForHeapStart() }.ptr
@@ -721,21 +725,19 @@ impl D3D12 {
             command_list.ClearRenderTargetView(
                 rtv_handle,
                 [0.0, 0.2, 0.4, 1.0].as_ptr(),
-                0,
-                std::ptr::null(),
+                &[],
             );
             command_list.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            command_list.IASetVertexBuffers(0, 1, &resources.vbv);
+            command_list.IASetVertexBuffers(0, &[resources.vbv]);
             command_list.DrawInstanced(3, 1, 0, 0);
 
             // Indicate that the back buffer will now be used to present.
             command_list.ResourceBarrier(
-                1,
-                &D3D12::transition_barrier(
+                &[D3D12::transition_barrier(
                     &resources.render_targets[resources.frame_index as usize],
                     D3D12_RESOURCE_STATE_RENDER_TARGET,
                     D3D12_RESOURCE_STATE_PRESENT,
-                ),
+                )],
             );
         }
 

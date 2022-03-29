@@ -327,7 +327,7 @@ impl Window {
 
     fn keyboard_pull(&mut self) {
         let keyboard_state: &mut [u8; 256] = &mut [0; 256];
-        unsafe { GetKeyboardState(keyboard_state.as_mut_ptr()) };
+        unsafe { GetKeyboardState(keyboard_state) };
         for key in 0..256 {
             self.keys[key].update_button((keyboard_state[key] >> 7) == 1);
         }
@@ -435,13 +435,12 @@ impl Window {
                 }
 
                 WM_CHAR => {
-                    let mut utf16_character: u16 = wparam.0 as u16;
+                    let mut utf16_character = &[wparam.0 as u16];
                     let mut ascii_character: u8 = 0;
                     let ascii_length = WideCharToMultiByte(
                         CP_ACP,
                         0,
-                        PCWSTR(&mut utf16_character),
-                        1,
+                        utf16_character,
                         PSTR(&mut ascii_character),
                         1,
                         PCSTR(0 as *mut u8),

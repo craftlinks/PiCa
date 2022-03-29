@@ -76,15 +76,15 @@ pub mod pica_mouse {
     impl Mouse {
         // what is going on with this RAWINPUTDEVICE_FLAGS??
         pub fn new(win32_window_handle: HWND) -> Result<Self> {
-            // TODO: Geert: You will need to Box this for sure!!
-            let raw_input_device = Box::into_raw(Box::new(RAWINPUTDEVICE {
+            let raw_input_device = &[RAWINPUTDEVICE {
                 usUsagePage: 0x01,
                 usUsage: 0x02,
                 dwFlags: RAWINPUTDEVICE_FLAGS(0),
                 hwndTarget: win32_window_handle,
-            }));
+            }];
+            let raw_input_device = Box::new(raw_input_device);
             if unsafe {
-                !RegisterRawInputDevices(raw_input_device, 1, size_of::<RAWINPUTDEVICE>() as u32)
+                !RegisterRawInputDevices(*raw_input_device, size_of::<RAWINPUTDEVICE>() as u32)
                     .as_bool()
             } {
                 return Err(Error::Mouse(
