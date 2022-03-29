@@ -3,6 +3,16 @@ use std::f32::consts::FRAC_PI_6;
 use glam::{Mat4, Vec3, Vec3A, Vec4};
 
 pub fn main() {
+    // Unit vectors
+    let i = Vec3::X;
+    let j = Vec3::Y;
+    let k = Vec3::Z;
+
+    let mut A = 5.0*i + 10.0*j + 2.0*k;
+
+    println!("i = {}\nj = {}\nk = {}\n 5.0*i + 10.0*j + 2.0*k = {}", i, j, k, A);
+    
+    
     // SCALING
     println!("SCALING");
     // create original vector
@@ -137,6 +147,8 @@ pub fn main() {
     // construct orthographic projection matrix
     let ortho_mat = Mat4::orthographic_rh(left, right, bottom, top, near, far);
     println!("orthographic matrix: {:?}\n ", ortho_mat);
+
+
 
 
 }
