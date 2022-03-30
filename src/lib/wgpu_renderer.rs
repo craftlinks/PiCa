@@ -1,13 +1,14 @@
-use crate::{pica_window::Window, math};
+use crate::{math, pica_window::Window};
 use glam::{Mat4, Vec3};
-use wgpu::{IndexFormat, PrimitiveTopology, ShaderSource, util::DeviceExt};
+use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
 
 pub struct Inputs<'a> {
     pub source: ShaderSource<'a>,
     pub topology: PrimitiveTopology,
     pub strip_index_format: Option<IndexFormat>,
-    pub vertices: Option<&'a[Vertex]>,
-    pub indices: Option<&'a[u16]>
+    pub vertices: Option<Vec<Vertex>>,
+    pub indices: Option<&'a [u16]>,
+    pub camera_position: (f32, f32, f32),
 }
 
 pub struct WGPURenderer {
@@ -68,7 +69,7 @@ impl WGPURenderer {
         });
 
         // uniform data
-        let camera_position = (1.5, 1.0, 3.0).into();
+        let camera_position = inputs.camera_position.into();
         let look_direction = (0.0, 0.0, 0.0).into();
         let up_direction = Vec3::Y;
         let model_mat = math::create_transforms([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
@@ -81,27 +82,25 @@ impl WGPURenderer {
         );
         let mvp_mat = vp_matrix.view_project_mat * model_mat;
         let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
-        let uniform_buffer = device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Uniform Buffer"),
-                contents: crate::utils::as_bytes(mvp_ref),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform Buffer"),
+            contents: crate::utils::as_bytes(mvp_ref),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
         let uniform_bind_group_layout =
-            device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                    label: Some("Uniform Bind Group Layout"),
-                });
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("Uniform Bind Group Layout"),
+            });
 
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &uniform_bind_group_layout,
@@ -111,8 +110,6 @@ impl WGPURenderer {
             }],
             label: Some("Uniform Bind Group"),
         });
-
-        
 
         // WGPU application dependent code
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -132,47 +129,56 @@ impl WGPURenderer {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[
-                    wgpu::ColorTargetState {
-                        format: config.format,
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent::REPLACE,
-                            alpha: wgpu::BlendComponent::REPLACE,
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    }
-                ],
+                targets: &[wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent::REPLACE,
+                        alpha: wgpu::BlendComponent::REPLACE,
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                }],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: inputs.topology,
                 strip_index_format: inputs.strip_index_format,
+                cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24Plus,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
         });
 
         let mut vertex_buffer = None;
-        let mut vertices_len:usize = 9;
+        let mut vertices_len: usize = 9;
         if let Some(vertices) = inputs.vertices {
-            vertex_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: crate::utils::as_bytes(vertices), // Everybody uses the Bytemuck crate here
-                usage: wgpu::BufferUsages::VERTEX,
-            }));
+            vertex_buffer = Some(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: crate::utils::as_bytes(vertices.as_slice()), // Everybody uses the Bytemuck crate here
+                    usage: wgpu::BufferUsages::VERTEX,
+                }),
+            );
             vertices_len = vertices.len();
         }
 
         let mut index_buffer = None;
         let mut indices_len = 0;
-        
+
         if let Some(indices) = inputs.indices {
-            index_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: crate::utils::as_bytes(indices),
-                usage: wgpu::BufferUsages::INDEX,
-            }));
+            index_buffer = Some(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: crate::utils::as_bytes(indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                }),
+            );
             indices_len = indices.len();
         }
 
@@ -197,15 +203,32 @@ impl WGPURenderer {
         wgpu_renderer
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         // Later should just take a closure
-        let frame = self.surface.get_current_texture().unwrap();
+        let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: self.config.width,
+                height: self.config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24Plus,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            label: None,
+        });
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Command Encoder") });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Command Encoder"),
+            });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -222,36 +245,45 @@ impl WGPURenderer {
                         store: true,
                     },
                 }],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: false,
+                    }),
+                    stencil_ops: None,
+                }),
             });
             render_pass.set_pipeline(&self.render_pipeline);
-            
+
             if let Some(vertex_buffer) = &self.vertex_buffer {
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             }
             if let Some(index_buffer) = &self.index_buffer {
                 render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..self.indices_len as u32, 0, 0..1);
-            }
-            else {
+            } else {
                 render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
                 render_pass.draw(0..self.vertices_len as u32, 0..1);
             }
-            
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();
+
+        Ok(())
     }
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Vertex {
-    pub position: [f32; 3],
+    pub position: [f32; 4],
+    pub color: [f32; 4],
 }
 
 impl Vertex {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr_array![0=>Float32x3];
+    const ATTRIBUTES: [wgpu::VertexAttribute; 2] =
+        wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4];
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,

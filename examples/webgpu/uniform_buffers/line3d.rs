@@ -3,9 +3,10 @@ use PiCa::error::Error;
 use PiCa::pica_window::{Window, WindowAttributes};
 use PiCa::wgpu_renderer::{Vertex, WGPURenderer};
 
-fn create_vertices() -> [Vertex; 1200] {
+fn create_vertices() -> [Vertex; 1200]{
     let mut vertices = [Vertex {
-        position: [0.0, 0.0, 0.0],
+        position: [0.0, 0.0, 0.0, 1.0],
+        color: [0.0, 0.0, 0.0, 1.0],
     }; 1200];
     for i in 0..1200 {
         let t = i as f32 / 150.0;
@@ -13,7 +14,8 @@ fn create_vertices() -> [Vertex; 1200] {
         let z = (-t).exp() * (30.0 * t).cos();
         let y = 2.0 * (-t).sin() - 1.0;
         vertices[i] = Vertex {
-            position: [x, y, z],
+            position: [x, y, z, 1.0],
+            color: [0.5, 0.5, 0.8, 1.0],
         };
     }
     vertices
@@ -29,8 +31,9 @@ pub fn main() -> Result<(), Error> {
         ))),
         topology: wgpu::PrimitiveTopology::LineStrip,
         strip_index_format: Some(wgpu::IndexFormat::Uint32),
-        vertices: Some(&vertices),
+        vertices: Some(vertices.to_vec()),
         indices: None,
+        camera_position: (1.5, 1.0, 3.0),
     };
     
     let window_attributes = WindowAttributes::new()

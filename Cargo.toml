@@ -74,3 +74,7 @@ path = "examples/webgpu/gpu_buffers/square_index.rs"
 [[example]]
 name = "line3d"
 path = "examples/webgpu/uniform_buffers/line3d.rs"
+
+[[example]]
+name = "color_cube"
+path = "examples/webgpu/uniform_buffers/color_cube.rs"
