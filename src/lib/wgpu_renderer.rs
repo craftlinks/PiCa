@@ -7,7 +7,7 @@ pub struct Inputs<'a> {
     pub topology: PrimitiveTopology,
     pub strip_index_format: Option<IndexFormat>,
     pub vertices: Option<Vec<Vertex>>,
-    pub indices: Option<&'a [u16]>,
+    pub indices: Option<Vec<u16>>,
     pub camera_position: (f32, f32, f32),
 }
 
@@ -114,7 +114,7 @@ impl WGPURenderer {
         // WGPU application dependent code
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&uniform_bind_group_layout], // placeholder, vertext and color data are written directly in the shader
+            bind_group_layouts: &[&uniform_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -141,7 +141,7 @@ impl WGPURenderer {
             primitive: wgpu::PrimitiveState {
                 topology: inputs.topology,
                 strip_index_format: inputs.strip_index_format,
-                cull_mode: Some(wgpu::Face::Back),
+                // cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -175,7 +175,7 @@ impl WGPURenderer {
             index_buffer = Some(
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Index Buffer"),
-                    contents: crate::utils::as_bytes(indices),
+                    contents: crate::utils::as_bytes(indices.as_slice()),
                     usage: wgpu::BufferUsages::INDEX,
                 }),
             );
@@ -261,6 +261,7 @@ impl WGPURenderer {
             }
             if let Some(index_buffer) = &self.index_buffer {
                 render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
                 render_pass.draw_indexed(0..self.indices_len as u32, 0, 0..1);
             } else {
                 render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);

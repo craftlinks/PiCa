@@ -1,103 +1,46 @@
+use std::borrow::Cow;
+use PiCa::error::Error;
+use PiCa::pica_window::{Window, WindowAttributes};
+use PiCa::wgpu_renderer::{Vertex, WGPURenderer};
+
 pub fn cube_positions() -> Vec<[i8; 3]> {
     [
-        // front (0, 0, 1)
-        [-1, -1, 1],
-        [1, -1, 1],
-        [-1, 1, 1],
-        [-1, 1, 1],
-        [1, -1, 1],
-        [1, 1, 1],
-        // right (1, 0, 0)
-        [1, -1, 1],
-        [1, -1, -1],
-        [1, 1, 1],
-        [1, 1, 1],
-        [1, -1, -1],
-        [1, 1, -1],
-        // back (0, 0, -1)
-        [1, -1, -1],
-        [-1, -1, -1],
-        [1, 1, -1],
-        [1, 1, -1],
-        [-1, -1, -1],
-        [-1, 1, -1],
-        // left (-1, 0, 0)
-        [-1, -1, -1],
-        [-1, -1, 1],
-        [-1, 1, -1],
-        [-1, 1, -1],
-        [-1, -1, 1],
-        [-1, 1, 1],
-        // top (0, 1, 0)
-        [-1, 1, 1],
-        [1, 1, 1],
-        [-1, 1, -1],
-        [-1, 1, -1],
-        [1, 1, 1],
-        [1, 1, -1],
-        // bottom (0, -1, 0)
-        [-1, -1, -1],
-        [1, -1, -1],
-        [-1, -1, 1],
-        [-1, -1, 1],
-        [1, -1, -1],
-        [1, -1, 1],
+        [-1, -1, 1],  // vertex a
+        [1, -1, 1],   // vertex b
+        [1, 1, 1],    // vertex c
+        [-1, 1, 1],   // vertex d
+        [-1, -1, -1], // vertex e
+        [1, -1, -1],  // vertex f
+        [1, 1, -1],   // vertex g
+        [-1, 1, -1],  // vertex h
     ]
     .to_vec()
 }
 
 pub fn cube_colors() -> Vec<[i8; 3]> {
     [
-        // front - blue
-        [0, 0, 1],
-        [0, 0, 1],
-        [0, 0, 1],
-        [0, 0, 1],
-        [0, 0, 1],
-        [0, 0, 1],
-        // right - red
-        [1, 0, 0],
-        [1, 0, 0],
-        [1, 0, 0],
-        [1, 0, 0],
-        [1, 0, 0],
-        [1, 0, 0],
-        // back - yellow
-        [1, 1, 0],
-        [1, 1, 0],
-        [1, 1, 0],
-        [1, 1, 0],
-        [1, 1, 0],
-        [1, 1, 0],
-        // left - aqua
-        [0, 1, 1],
-        [0, 1, 1],
-        [0, 1, 1],
-        [0, 1, 1],
-        [0, 1, 1],
-        [0, 1, 1],
-        // top - green
-        [0, 1, 0],
-        [0, 1, 0],
-        [0, 1, 0],
-        [0, 1, 0],
-        [0, 1, 0],
-        [0, 1, 0],
-        // bottom - fuchsia
-        [1, 0, 1],
-        [1, 0, 1],
-        [1, 0, 1],
-        [1, 0, 1],
-        [1, 0, 1],
-        [1, 0, 1],
+        [0, 0, 1], // vertex a
+        [1, 0, 1], // vertex b
+        [1, 1, 1], // vertex c
+        [0, 1, 1], // vertex d
+        [0, 0, 0], // vertex e
+        [1, 0, 0], // vertex f
+        [1, 1, 0], // vertex g
+        [0, 1, 0], // vertex h
     ]
     .to_vec()
 }
 
-use std::borrow::Cow;
-use PiCa::error::Error;
-use PiCa::pica_window::{Window, WindowAttributes};
-use PiCa::wgpu_renderer::{Vertex, WGPURenderer};
+fn cube_indices() -> Vec<u16> {
+    [
+        0, 1, 2, 2, 3, 0, // front
+        1, 5, 6, 6, 2, 1, // right
+        4, 7, 6, 6, 5, 4, // back
+        0, 3, 7, 7, 4, 0, // left
+        3, 2, 6, 6, 7, 3, // top
+        0, 4, 5, 5, 1, 0, // bottom
+    ].to_vec()
+} 
 
 fn vertex(p: [i8; 3], c: [i8; 3]) -> Vertex {
     Vertex {
@@ -118,6 +61,7 @@ fn create_vertices() -> Vec<Vertex> {
 
 pub fn main() -> Result<(), Error> {
     let vertices = create_vertices();
+    let indices = cube_indices();
 
     let inputs = PiCa::wgpu_renderer::Inputs {
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
@@ -126,7 +70,7 @@ pub fn main() -> Result<(), Error> {
         topology: wgpu::PrimitiveTopology::TriangleList,
         strip_index_format: None, //Some(wgpu::IndexFormat::Uint32),
         vertices: Some(vertices),
-        indices: None,
+        indices: Some(indices),
         camera_position: (3.0, 1.5, 3.0),
     };
 
