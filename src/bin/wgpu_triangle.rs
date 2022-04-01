@@ -23,6 +23,7 @@ pub fn main() -> Result<(), Error> {
         strip_index_format: None,
         vertices: None,
         indices: None,
+        camera_position: (3.0, 1.5, 2.0),
     };
 
     // WGPURenderer initialization
