@@ -47,6 +47,9 @@ pub fn main() -> Result<(), Error> {
 
     // PiCa window rendering loop
     while window.pull() {
+        
+        
+        
         window.push();
 
         // TODO: create a PiCa renderer trait, so this can be hidden behind the 'push()' function call

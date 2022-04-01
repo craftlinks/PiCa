@@ -11,9 +11,9 @@ pub fn create_transforms(translation: [f32; 3], rotation: [f32; 3], scaling: [f3
     // create individual transformation matrices
     let trans_mat =
         Mat4::from_translation(Vec3::new(translation[0], translation[1], translation[2]));
-    let rotate_mat_x = Mat4::from_rotation_x(f32::to_radians(rotation[0]));
-    let rotate_mat_y = Mat4::from_rotation_y(f32::to_radians(rotation[1]));
-    let rotate_mat_z = Mat4::from_rotation_z(f32::to_radians(rotation[2]));
+    let rotate_mat_x = Mat4::from_rotation_x(rotation[0]);
+    let rotate_mat_y = Mat4::from_rotation_y(rotation[1]);
+    let rotate_mat_z = Mat4::from_rotation_z(rotation[2]);
     let scale_mat = Mat4::from_scale(Vec3::new(scaling[0], scaling[1], scaling[2]));
     // combine all transformation matrices together to form a final transform matrix: model matrix
     let model_mat = trans_mat * rotate_mat_z * rotate_mat_y * rotate_mat_x * scale_mat;

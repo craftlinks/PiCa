@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use PiCa::error::Error;
+use PiCa::math;
 use PiCa::pica_window::{Window, WindowAttributes};
+use PiCa::utils;
 use PiCa::wgpu_renderer::{Vertex, WGPURenderer};
 
 pub fn cube_positions() -> Vec<[i8; 3]> {
@@ -39,8 +41,9 @@ fn cube_indices() -> Vec<u16> {
         0, 3, 7, 7, 4, 0, // left
         3, 2, 6, 6, 7, 3, // top
         0, 4, 5, 5, 1, 0, // bottom
-    ].to_vec()
-} 
+    ]
+    .to_vec()
+}
 
 fn vertex(p: [i8; 3], c: [i8; 3]) -> Vertex {
     Vertex {
@@ -83,11 +86,23 @@ pub fn main() -> Result<(), Error> {
 
     let mut wgpu_renderer = pollster::block_on(WGPURenderer::wgpu_init(window.as_ref(), inputs));
 
+    const ANIMATION_SPEED: f32 = 1.0;
+
     // PiCa window rendering loop
     while window.pull() {
-        window.push();
+        // window.push();
 
-        // TODO: create a PiCa renderer trait, so this can be hidden behind the 'push()' function call
+        let dt = ANIMATION_SPEED * window.time.seconds;
+        let model_mat =
+            math::create_transforms([0.0, 0.0, 0.0], [dt.sin(), 0.0, dt.cos()], [1.0, 1.0, 1.0]);
+        let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;
+        let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
+        wgpu_renderer.queue.write_buffer(
+            &wgpu_renderer.uniform_buffer,
+            0,
+            utils::as_bytes(mvp_ref),
+        );
+
         wgpu_renderer.render().unwrap();
     }
 
