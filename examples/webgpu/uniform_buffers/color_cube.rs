@@ -86,7 +86,7 @@ pub fn main() -> Result<(), Error> {
 
     let mut wgpu_renderer = pollster::block_on(WGPURenderer::wgpu_init(window.as_ref(), inputs));
 
-    const ANIMATION_SPEED: f32 = 1.0;
+    const ANIMATION_SPEED: f32 = 10.0;
 
     // PiCa window rendering loop
     while window.pull() {
