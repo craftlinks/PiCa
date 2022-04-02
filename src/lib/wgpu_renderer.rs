@@ -275,13 +275,7 @@ impl WGPURenderer {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Vertex {
-    pub position: [f32; 4],
-    pub color: [f32; 4],
-}
-
+use math::Vertex;
 impl Vertex {
     const ATTRIBUTES: [wgpu::VertexAttribute; 2] =
         wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4];

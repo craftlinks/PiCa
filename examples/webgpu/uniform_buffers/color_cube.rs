@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 use PiCa::error::Error;
-use PiCa::math;
+use PiCa::math::{Vertex, self};
 use PiCa::pica_window::{Window, WindowAttributes};
 use PiCa::utils;
-use PiCa::wgpu_renderer::{Vertex, WGPURenderer};
+use PiCa::wgpu_renderer::WGPURenderer;
 
 pub fn cube_positions() -> Vec<[i8; 3]> {
     [
@@ -45,19 +45,12 @@ fn cube_indices() -> Vec<u16> {
     .to_vec()
 }
 
-fn vertex(p: [i8; 3], c: [i8; 3]) -> Vertex {
-    Vertex {
-        position: [p[0] as f32, p[1] as f32, p[2] as f32, 1.0],
-        color: [c[0] as f32, c[1] as f32, c[2] as f32, 1.0],
-    }
-}
-
 fn create_vertices() -> Vec<Vertex> {
     let pos = cube_positions();
     let col = cube_colors();
     let mut data: Vec<Vertex> = Vec::with_capacity(pos.len());
     for i in 0..pos.len() {
-        data.push(vertex(pos[i], col[i]));
+        data.push(Vertex::vertex(pos[i], col[i]));
     }
     data.to_vec()
 }
@@ -86,7 +79,7 @@ pub fn main() -> Result<(), Error> {
 
     let mut wgpu_renderer = pollster::block_on(WGPURenderer::wgpu_init(window.as_ref(), inputs));
 
-    const ANIMATION_SPEED: f32 = 10.0;
+    const ANIMATION_SPEED: f32 = 5.0;
 
     // PiCa window rendering loop
     while window.pull() {
@@ -94,7 +87,7 @@ pub fn main() -> Result<(), Error> {
 
         let dt = ANIMATION_SPEED * window.time.seconds;
         let model_mat =
-            math::create_transforms([0.0, 0.0, 0.0], [dt.sin(), 0.0, dt.cos()], [1.0, 1.0, 1.0]);
+            math::create_transforms([0.0, 0.0, 0.0], [dt.sin(), dt.sin() * dt.tanh(), dt.cos()], [1.0, 1.0, 1.0]);
         let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;
         let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
         wgpu_renderer.queue.write_buffer(
