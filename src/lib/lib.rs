@@ -1,3 +1,7 @@
+use std::f32::consts::PI;
+
+use glam::{Mat4, Vec3};
+
 pub mod dx12_renderer;
 pub mod math;
 pub mod pica_window;
@@ -143,6 +147,109 @@ pub mod error {
     }
 
     // impl error::Error for Win32Error {}
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Vertex {
+    pub position: [f32; 4],
+    pub color: [f32; 4],
+}
+
+impl Vertex {
+    pub fn vertex(p: [i8; 3], c: [i8; 3]) -> Vertex {
+        Vertex {
+            position: [p[0] as f32, p[1] as f32, p[2] as f32, 1.0],
+            color: [c[0] as f32, c[1] as f32, c[2] as f32, 1.0],
+        }
+    }
+}
+
+pub mod camera {
+    use std::f32::consts::PI;
+
+    use glam::{Mat4, Vec3};
+
+    pub struct Camera {
+        pub position: Vec3,
+        yaw: f32,
+        pitch: f32,
+    }
+
+    impl Camera {
+        pub fn new<Pt: Into<Vec3>, Yaw: Into<f32>, Pitch: Into<f32>>(
+            position: Pt,
+            yaw: Yaw,     // horizontal rotation
+            pitch: Pitch, // vertical rotation
+        ) -> Self {
+            Self {
+                position: position.into(),
+                yaw: yaw.into(),
+                pitch: pitch.into(),
+            }
+        }
+
+        pub fn view_mat(&self) -> Mat4 {
+            Mat4::look_at_rh(
+                self.position,
+                Vec3::new(
+                    self.pitch.cos() * self.yaw.cos(),
+                    self.pitch.sin(),
+                    self.pitch.cos() * self.yaw.sin(),
+                )
+                .normalize(),
+                Vec3::Y,
+            )
+        }
+    }
+
+    pub struct CameraController {
+        rotatex: f32,
+        rotatey: f32,
+        speed: f32,
+    }
+
+    impl CameraController {
+        pub fn new(speed: f32) -> Self {
+            Self {
+                rotatex: 0.0,
+                rotatey: 0.0,
+                speed,
+            }
+        }
+
+        pub fn mouse_move(&mut self, mousex: f64, mousey: f64) {
+            self.rotatex = mousex as f32;
+            self.rotatey = mousey as f32;
+        }
+
+        pub fn update_camera(&mut self, camera: &mut Camera) {
+            camera.yaw += self.rotatex * self.speed;
+            camera.pitch += self.rotatey * self.speed;
+            self.rotatex = 0.0;
+            self.rotatey = 0.0;
+            if camera.pitch < -(89.0 * PI / 180.0) {
+                camera.pitch = -(89.0 * PI / 180.0);
+            } else if camera.pitch > (89.0 * PI / 180.0) {
+                camera.pitch = 89.0 * PI / 180.0;
+            }
+        }
+    }
+
+    #[repr(C)]
+    struct CameraUniform {
+        view_mat: Mat4,
+    }
+    impl CameraUniform {
+        fn new() -> Self {
+            Self {
+                view_mat: Mat4::IDENTITY,
+            }
+        }
+        fn update_view_project(&mut self, camera: &Camera, project_mat: Mat4) {
+            self.view_mat = (project_mat * camera.view_mat()).into()
+        }
+    }
 }
 
 /// Some common utilities.

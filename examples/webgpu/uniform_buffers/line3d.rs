@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use PiCa::error::Error;
 use PiCa::pica_window::{Window, WindowAttributes};
 use PiCa::wgpu_renderer::WGPURenderer;
-use PiCa::math::Vertex;
+use PiCa::Vertex;
 
 fn create_vertices() -> [Vertex; 1200]{
     let mut vertices = [Vertex {

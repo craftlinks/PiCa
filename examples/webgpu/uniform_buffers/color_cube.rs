@@ -1,9 +1,11 @@
 use std::borrow::Cow;
+use PiCa::camera;
 use PiCa::error::Error;
-use PiCa::math::{Vertex, self};
+use PiCa::math;
 use PiCa::pica_window::{Window, WindowAttributes};
 use PiCa::utils;
 use PiCa::wgpu_renderer::WGPURenderer;
+use PiCa::Vertex;
 
 pub fn cube_positions() -> Vec<[i8; 3]> {
     [
@@ -86,8 +88,11 @@ pub fn main() -> Result<(), Error> {
         // window.push();
 
         let dt = ANIMATION_SPEED * window.time.seconds;
-        let model_mat =
-            math::create_transforms([0.0, 0.0, 0.0], [dt.sin(), dt.sin() * dt.tanh(), dt.cos()], [1.0, 1.0, 1.0]);
+        let model_mat = math::create_transforms(
+            [0.0, 0.0, 0.0],
+            [dt.sin(), dt.sin() * dt.tanh(), dt.cos()],
+            [1.0, 1.0, 1.0],
+        );
         let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;
         let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
         wgpu_renderer.queue.write_buffer(
