@@ -85,7 +85,7 @@ impl WGPURenderer {
             size.0 as f32 / size.1 as f32,
             math::ProjectionType::PERSPECTIVE,
         );
-        let camera_controller = camera::CameraController::new(0.005);
+        let camera_controller = camera::CameraController::new(4.0, 0.4);
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_model_view_project(&camera, project_mat, model_mat);
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

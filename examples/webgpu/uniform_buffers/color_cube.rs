@@ -95,14 +95,56 @@ pub fn main() -> Result<(), Error> {
         );
 
         if window.mouse.left_button.down {
-            let mousex = window.mouse.delta_position.0 as f64;
-            let mousey = window.mouse.delta_position.1 as f64;
+            let mousex = window.mouse.delta_position.0 as f32;
+            let mousey = window.mouse.delta_position.1 as f32;
             wgpu_renderer.camera_controller.mouse_move(mousex, mousey);
         }
 
+        if window.keys['W' as u8 as usize].down {
+            wgpu_renderer.camera_controller.amount_forward = 1.0;
+            println!("w");
+        } else {
+            wgpu_renderer.camera_controller.amount_forward = 0.0;
+        }
+
+        if window.keys['S' as u8 as usize].down {
+            wgpu_renderer.camera_controller.amount_backward = 1.0;
+            println!("s");
+        } else {
+            wgpu_renderer.camera_controller.amount_backward = 0.0;
+        }
+        if window.keys['D' as u8 as usize].down {
+            wgpu_renderer.camera_controller.amount_right = 1.0;
+            println!("d");
+        } else {
+            wgpu_renderer.camera_controller.amount_right = 0.0;
+        }
+        if window.keys['A' as u8 as usize].down {
+            wgpu_renderer.camera_controller.amount_left = 1.0;
+            println!("a");
+        } else {
+            wgpu_renderer.camera_controller.amount_left = 0.0;
+        }
+        if window.keys['U' as u8 as usize].down {
+            wgpu_renderer.camera_controller.amount_up = 1.0;
+            println!("u");
+        } else {
+            wgpu_renderer.camera_controller.amount_left = 0.0;
+        }
+        if window.keys['N' as u8 as usize].down {
+            wgpu_renderer.camera_controller.amount_down = 1.0;
+            println!("n");
+        } else {
+            wgpu_renderer.camera_controller.amount_down = 0.0;
+        }
+
+        wgpu_renderer.camera_controller.scroll = -(window.mouse.delta_wheel as f32);
+
+
         wgpu_renderer
             .camera_controller
-            .update_camera(&mut wgpu_renderer.camera);
+            .update_camera(&mut wgpu_renderer.camera, window.time.delta_seconds);
+        
         wgpu_renderer.camera_uniform.update_model_view_project(
             &wgpu_renderer.camera,
             wgpu_renderer.project_mat,
@@ -111,7 +153,7 @@ pub fn main() -> Result<(), Error> {
         wgpu_renderer.queue.write_buffer(
             &wgpu_renderer.camera_buffer,
             0,
-            utils::as_bytes((&[wgpu_renderer.camera_uniform])),
+            utils::as_bytes(&[wgpu_renderer.camera_uniform]),
         );
 
         // let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;

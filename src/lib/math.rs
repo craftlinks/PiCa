@@ -2,6 +2,9 @@ use std::f32::consts::PI;
 
 use glam::{Mat4, Vec3};
 
+pub type Rad = f32;
+pub type Angle = f32;
+
 pub const OPENGL_TO_WGPU_MATRIX: &[f32; 16] = &[
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
 ];

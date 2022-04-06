@@ -165,75 +165,112 @@ impl Vertex {
     }
 }
 
-// A Camera 
-
+// A Camera
 pub mod camera {
-    use std::f32::consts::PI;
+    use crate::math::{self, Rad};
+    use glam::{Mat4, Vec3, Vec4};
+    use std::f32::consts::FRAC_PI_2;
 
-    use glam::{Mat4, Vec3};
+    const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
     pub struct Camera {
         pub position: Vec3,
-        yaw: f32,
-        pitch: f32,
+        yaw: math::Rad,   // horizontal rotation
+        pitch: math::Rad, // vertical rotation
     }
 
     impl Camera {
-        pub fn new<Pt: Into<Vec3>, Yaw: Into<f32>, Pitch: Into<f32>>(
+        pub fn new<Pt: Into<Vec3>, Yaw: Into<Rad>, Pitch: Into<Rad>>(
             position: Pt,
-            yaw: Yaw,     // horizontal rotation
-            pitch: Pitch, // vertical rotation
+            yaw: Yaw,
+            pitch: Pitch,
         ) -> Self {
             Self {
                 position: position.into(),
-                yaw: yaw.into().to_radians(), // is this in degrees or RAD!?
+                yaw: yaw.into().to_radians(),
                 pitch: pitch.into().to_radians(),
             }
         }
 
         pub fn view_mat(&self) -> Mat4 {
+            let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
+            let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
             Mat4::look_at_rh(
                 self.position,
-                Vec3::new(
-                    self.pitch.cos() * self.yaw.cos(),
-                    self.pitch.sin(),
-                    self.pitch.cos() * self.yaw.sin(),
-                )
-                .normalize(),
+                Vec3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize(),
                 Vec3::Y,
             )
         }
     }
 
+    #[derive(Debug)]
     pub struct CameraController {
-        rotatex: f32,
-        rotatey: f32,
-        speed: f32,
+        pub amount_left: f32,
+        pub amount_right: f32,
+        pub amount_forward: f32,
+        pub amount_backward: f32,
+        pub amount_up: f32,
+        pub amount_down: f32,
+        pub rotate_horizontal: f32,
+        pub rotate_vertical: f32,
+        pub scroll: f32,
+        pub speed: f32,
+        pub sensitivity: f32,
     }
 
     impl CameraController {
-        pub fn new(speed: f32) -> Self {
+        pub fn new(speed: f32, sensitivity: f32) -> Self {
             Self {
-                rotatex: 0.0,
-                rotatey: 0.0,
+                amount_left: 0.0,
+                amount_right: 0.0,
+                amount_forward: 0.0,
+                amount_backward: 0.0,
+                amount_up: 0.0,
+                amount_down: 0.0,
+                rotate_horizontal: 0.0,
+                rotate_vertical: 0.0,
+                scroll: 0.0,
                 speed,
+                sensitivity,
             }
         }
 
-        pub fn mouse_move(&mut self, mousex: f64, mousey: f64) {
-            self.rotatex = mousex as f32;
-            self.rotatey = mousey as f32;
+        pub fn mouse_move(&mut self, mousex: f32, mousey: f32) {
+            self.rotate_horizontal = mousex as f32;
+            self.rotate_vertical = mousey as f32;
         }
 
-        pub fn update_camera(&mut self, camera: &mut Camera) {
-            camera.yaw += self.rotatex * self.speed;
-            camera.pitch += self.rotatey * self.speed;
-            self.rotatex = 0.0;
-            self.rotatey = 0.0;
-            if camera.pitch < -(89.0 * PI / 180.0) {
-                camera.pitch = -(89.0 * PI / 180.0);
-            } else if camera.pitch > (89.0 * PI / 180.0) {
-                camera.pitch = 89.0 * PI / 180.0;
+        pub fn update_camera(&mut self, camera: &mut Camera, dt: f32) {
+            // Move forward/backward and left/right
+            let (yaw_sin, yaw_cos) = camera.yaw.sin_cos();
+            let forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
+            let right = Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
+            camera.position +=
+                forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
+            camera.position += right * (self.amount_right - self.amount_left) * self.speed * dt;
+
+            // Move in/out
+            let (pitch_sin, pitch_cos) = camera.pitch.sin_cos();
+            let scrollward =
+                Vec3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
+            camera.position += scrollward * self.scroll * self.speed * self.sensitivity * dt;
+            self.scroll = 0.0;
+
+            // Move up/down.
+            camera.position.y += (self.amount_up - self.amount_down) * self.speed * dt;
+
+            // Rotate
+            camera.yaw += self.rotate_horizontal * self.sensitivity * dt;
+            camera.pitch += -self.rotate_vertical * self.sensitivity * dt;
+
+            self.rotate_horizontal = 0.0;
+            self.rotate_vertical = 0.0;
+
+            // Keep the camera's angle from going too high/low.
+            if camera.pitch < -SAFE_FRAC_PI_2 {
+                camera.pitch = -SAFE_FRAC_PI_2;
+            } else if camera.pitch > SAFE_FRAC_PI_2 {
+                camera.pitch = SAFE_FRAC_PI_2;
             }
         }
     }
@@ -242,16 +279,19 @@ pub mod camera {
     #[repr(C)]
     #[derive(Copy, Clone)]
     pub struct CameraUniform {
+        view_pos: Vec4,
         view_mat: Mat4,
     }
     impl CameraUniform {
         pub fn new() -> Self {
             Self {
+                view_pos: Vec4::new(0.0,0.0,0.0,0.0),
                 view_mat: Mat4::IDENTITY,
             }
         }
         pub fn update_view_project(&mut self, camera: &Camera, project_mat: Mat4) {
-            self.view_mat = (project_mat * camera.view_mat()).into()
+            self.view_pos = (camera.position, 0.0).into();
+            self.view_mat = (project_mat * camera.view_mat()).into();
         }
 
         pub fn update_model_view_project(
