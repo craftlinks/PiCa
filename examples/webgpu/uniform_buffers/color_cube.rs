@@ -81,7 +81,7 @@ pub fn main() -> Result<(), Error> {
 
     let mut wgpu_renderer = pollster::block_on(WGPURenderer::wgpu_init(window.as_ref(), inputs));
 
-    const ANIMATION_SPEED: f32 = 5.0;
+    const ANIMATION_SPEED: f32 = 1.0;
 
     // PiCa window rendering loop
     while window.pull() {
@@ -93,13 +93,34 @@ pub fn main() -> Result<(), Error> {
             [dt.sin(), dt.sin() * dt.tanh(), dt.cos()],
             [1.0, 1.0, 1.0],
         );
-        let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;
-        let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
-        wgpu_renderer.queue.write_buffer(
-            &wgpu_renderer.uniform_buffer,
-            0,
-            utils::as_bytes(mvp_ref),
+
+        if window.mouse.left_button.down {
+            let mousex = window.mouse.delta_position.0 as f64;
+            let mousey = window.mouse.delta_position.1 as f64;
+            wgpu_renderer.camera_controller.mouse_move(mousex, mousey);
+        }
+
+        wgpu_renderer
+            .camera_controller
+            .update_camera(&mut wgpu_renderer.camera);
+        wgpu_renderer.camera_uniform.update_model_view_project(
+            &wgpu_renderer.camera,
+            wgpu_renderer.project_mat,
+            model_mat,
         );
+        wgpu_renderer.queue.write_buffer(
+            &wgpu_renderer.camera_buffer,
+            0,
+            utils::as_bytes((&[wgpu_renderer.camera_uniform])),
+        );
+
+        // let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;
+        // let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
+        // wgpu_renderer.queue.write_buffer(
+        //     &wgpu_renderer.uniform_buffer,
+        //     0,
+        //     utils::as_bytes(mvp_ref),
+        // );
 
         wgpu_renderer.render().unwrap();
     }

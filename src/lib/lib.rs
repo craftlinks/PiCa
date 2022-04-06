@@ -165,6 +165,8 @@ impl Vertex {
     }
 }
 
+// A Camera 
+
 pub mod camera {
     use std::f32::consts::PI;
 
@@ -184,8 +186,8 @@ pub mod camera {
         ) -> Self {
             Self {
                 position: position.into(),
-                yaw: yaw.into(),
-                pitch: pitch.into(),
+                yaw: yaw.into().to_radians(), // is this in degrees or RAD!?
+                pitch: pitch.into().to_radians(),
             }
         }
 
@@ -237,17 +239,28 @@ pub mod camera {
     }
 
     #[repr(C)]
-    struct CameraUniform {
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct CameraUniform {
         view_mat: Mat4,
     }
     impl CameraUniform {
-        fn new() -> Self {
+        pub fn new() -> Self {
             Self {
                 view_mat: Mat4::IDENTITY,
             }
         }
-        fn update_view_project(&mut self, camera: &Camera, project_mat: Mat4) {
+        pub fn update_view_project(&mut self, camera: &Camera, project_mat: Mat4) {
             self.view_mat = (project_mat * camera.view_mat()).into()
+        }
+
+        pub fn update_model_view_project(
+            &mut self,
+            camera: &Camera,
+            project_mat: Mat4,
+            model_mat: Mat4,
+        ) {
+            self.view_mat = (project_mat * camera.view_mat() * model_mat).into();
         }
     }
 }

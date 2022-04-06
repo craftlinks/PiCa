@@ -1,4 +1,8 @@
-use crate::{math, pica_window::Window};
+use crate::{
+    camera::{self, CameraUniform},
+    math,
+    pica_window::Window,
+};
 use glam::{Mat4, Vec3};
 use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
 
@@ -22,11 +26,16 @@ pub struct WGPURenderer {
     pub vertices_len: usize,
     pub index_buffer: Option<wgpu::Buffer>,
     pub indices_len: usize,
-    pub uniform_buffer: wgpu::Buffer,
-    pub uniform_bind_group: wgpu::BindGroup,
+    // pub uniform_buffer: wgpu::Buffer,
+    // pub uniform_bind_group: wgpu::BindGroup,
     pub model_mat: Mat4,
-    pub view_mat: Mat4,
+    // pub view_mat: Mat4,
     pub project_mat: Mat4,
+    pub camera: crate::camera::Camera,
+    pub camera_controller: crate::camera::CameraController,
+    pub camera_uniform: crate::camera::CameraUniform,
+    pub camera_buffer: wgpu::Buffer,
+    pub camera_bind_group: wgpu::BindGroup,
 }
 
 impl WGPURenderer {
@@ -69,29 +78,27 @@ impl WGPURenderer {
         });
 
         // uniform data
-        let camera_position = inputs.camera_position.into();
-        let look_direction = (0.0, 0.0, 0.0).into();
-        let up_direction = Vec3::Y;
+        //let camera_position = inputs.camera_position.into();
         let model_mat = math::create_transforms([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
-        let vp_matrix = math::create_view_projection(
-            camera_position,
-            look_direction,
-            up_direction,
+        let camera = camera::Camera::new((2.0, 3.0, 5.0), -80.0, -30.0);
+        let project_mat = math::create_projection(
             size.0 as f32 / size.1 as f32,
             math::ProjectionType::PERSPECTIVE,
         );
-        let mvp_mat = vp_matrix.view_project_mat * model_mat;
-        let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Buffer"),
-            contents: crate::utils::as_bytes(mvp_ref),
+        let camera_controller = camera::CameraController::new(0.005);
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_model_view_project(&camera, project_mat, model_mat);
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: crate::utils::as_bytes(&[camera_uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let uniform_bind_group_layout =
+
+        let camera_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -101,20 +108,61 @@ impl WGPURenderer {
                 }],
                 label: Some("Uniform Bind Group Layout"),
             });
-
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &uniform_bind_group_layout,
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &camera_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
+                resource: camera_buffer.as_entire_binding(),
             }],
             label: Some("Uniform Bind Group"),
         });
+        
+
+        // let look_direction = (0.0, 0.0, 0.0).into();
+        // let up_direction = Vec3::Y;
+        // let model_mat = math::create_transforms([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+        // let vp_matrix = math::create_view_projection(
+        //     camera_position,
+        //     look_direction,
+        //     up_direction,
+        //     size.0 as f32 / size.1 as f32,
+        //     math::ProjectionType::PERSPECTIVE,
+        // );
+        // let mvp_mat = vp_matrix.view_project_mat * model_mat;
+        // let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
+        // let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Uniform Buffer"),
+        //     contents: crate::utils::as_bytes(mvp_ref),
+        //     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        // });
+        // let uniform_bind_group_layout =
+        //     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        //         entries: &[wgpu::BindGroupLayoutEntry {
+        //             binding: 0,
+        //             visibility: wgpu::ShaderStages::VERTEX,
+        //             ty: wgpu::BindingType::Buffer {
+        //                 ty: wgpu::BufferBindingType::Uniform,
+        //                 has_dynamic_offset: false,
+        //                 min_binding_size: None,
+        //             },
+        //             count: None,
+        //         }],
+        //         label: Some("Uniform Bind Group Layout"),
+        //     });
+
+        // let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        //     layout: &uniform_bind_group_layout,
+        //     entries: &[wgpu::BindGroupEntry {
+        //         binding: 0,
+        //         resource: uniform_buffer.as_entire_binding(),
+        //     }],
+        //     label: Some("Uniform Bind Group"),
+        // });
 
         // WGPU application dependent code
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&uniform_bind_group_layout],
+            bind_group_layouts: &[&camera_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -141,7 +189,7 @@ impl WGPURenderer {
             primitive: wgpu::PrimitiveState {
                 topology: inputs.topology,
                 strip_index_format: inputs.strip_index_format,
-                // cull_mode: Some(wgpu::Face::Back),
+                cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -193,11 +241,14 @@ impl WGPURenderer {
             vertices_len,
             index_buffer,
             indices_len,
-            uniform_buffer,
-            uniform_bind_group,
+            camera_buffer,
+            camera_bind_group,
+            project_mat,
             model_mat,
-            view_mat: vp_matrix.view_mat,
-            project_mat: vp_matrix.project_mat,
+            camera,
+            camera_controller,
+            camera_uniform,
+
         };
 
         wgpu_renderer
@@ -261,10 +312,10 @@ impl WGPURenderer {
             }
             if let Some(index_buffer) = &self.index_buffer {
                 render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
                 render_pass.draw_indexed(0..self.indices_len as u32, 0, 0..1);
             } else {
-                render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
                 render_pass.draw(0..self.vertices_len as u32, 0..1);
             }
         }
