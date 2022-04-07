@@ -3,36 +3,40 @@ use crate::{
     pica_mouse::{Button, Mouse},
     pica_time::Time,
     utils::*,
+    win_error,
 };
 use std::{ffi::c_void, mem::size_of};
-use windows::{Win32::{
-    Devices::HumanInterfaceDevice::MOUSE_MOVE_RELATIVE,
-    Foundation::{
-        GetLastError, SetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM, WIN32_ERROR,
-    },
-    Globalization::{WideCharToMultiByte, CP_ACP},
-    Graphics::Gdi::{ClientToScreen, GetDC, HDC},
-    System::{
-        LibraryLoader::GetModuleHandleW,
-        Performance::QueryPerformanceCounter,
-        Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber},
-    },
-    UI::{
-        Input::{
-            GetRawInputData, KeyboardAndMouse::GetKeyboardState, HRAWINPUT, RAWINPUT,
-            RAWINPUTHEADER, RID_INPUT, RIM_TYPEMOUSE,
+use windows::{
+    core::{PCSTR, PCWSTR, PSTR},
+    Win32::{
+        Devices::HumanInterfaceDevice::MOUSE_MOVE_RELATIVE,
+        Foundation::{
+            GetLastError, SetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WIN32_ERROR, WPARAM,
         },
-        WindowsAndMessaging::{
-            AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect,
-            GetCursorPos, GetWindowLongPtrW, LoadCursorW, PeekMessageW, RegisterClassW, SetTimer,
-            SetWindowLongPtrW, TranslateMessage, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT,
-            GWLP_USERDATA, IDC_CROSS, MSG, PM_REMOVE, RI_MOUSE_LEFT_BUTTON_DOWN,
-            RI_MOUSE_LEFT_BUTTON_UP, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP,
-            RI_MOUSE_WHEEL, WHEEL_DELTA, WM_CHAR, WM_DESTROY, WM_INPUT, WM_SIZE, WM_TIMER,
-            WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
+        Globalization::{WideCharToMultiByte, CP_ACP},
+        Graphics::Gdi::{ClientToScreen, GetDC, HDC},
+        System::{
+            LibraryLoader::GetModuleHandleW,
+            Performance::QueryPerformanceCounter,
+            Threading::{ConvertThreadToFiber, CreateFiber, SwitchToFiber},
+        },
+        UI::{
+            Input::{
+                GetRawInputData, KeyboardAndMouse::GetKeyboardState, HRAWINPUT, RAWINPUT,
+                RAWINPUTHEADER, RID_INPUT, RIM_TYPEMOUSE,
+            },
+            WindowsAndMessaging::{
+                AdjustWindowRect, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect,
+                GetCursorPos, GetWindowLongPtrW, LoadCursorW, PeekMessageW, RegisterClassW,
+                SetTimer, SetWindowLongPtrW, TranslateMessage, CS_HREDRAW, CS_VREDRAW,
+                CW_USEDEFAULT, GWLP_USERDATA, IDC_CROSS, MSG, PM_REMOVE, RI_MOUSE_LEFT_BUTTON_DOWN,
+                RI_MOUSE_LEFT_BUTTON_UP, RI_MOUSE_RIGHT_BUTTON_DOWN, RI_MOUSE_RIGHT_BUTTON_UP,
+                RI_MOUSE_WHEEL, WHEEL_DELTA, WM_CHAR, WM_DESTROY, WM_INPUT, WM_SIZE, WM_TIMER,
+                WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
+            },
         },
     },
-}, core::{PCWSTR, PCSTR, PSTR}};
+};
 
 /// Wrapper type around [`Error`]
 use crate::error::Error;
@@ -157,7 +161,8 @@ impl Window {
         let window_class = {
             unsafe {
                 WNDCLASSW {
-                    hCursor: LoadCursorW(None, IDC_CROSS),
+                    hCursor: LoadCursorW(None, IDC_CROSS)
+                        .map_err(|e| Error::Win32Error(win_error!(e)))?,
                     hInstance: instance,
                     lpszClassName: PCWSTR(window_class_name),
 
@@ -344,8 +349,7 @@ impl Window {
         self.mouse.position.1 = mouse_position.y;
     }
 
-    pub fn push(&mut self) {
-    }
+    pub fn push(&mut self) {}
 
     // Win32 message handling
     extern "system" fn wndproc(

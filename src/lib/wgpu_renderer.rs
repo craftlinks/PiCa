@@ -1,4 +1,5 @@
-use crate::{math, pica_window::Window};
+use crate::math;
+use crate::pica_window::Window;
 use glam::{Mat4, Vec3};
 use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
 

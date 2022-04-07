@@ -328,7 +328,10 @@ impl Resources {
 
         let fence_value = 1;
 
-        let fence_event = unsafe { CreateEventA(std::ptr::null_mut(), false, false, None) };
+        let fence_event = unsafe {
+            CreateEventA(std::ptr::null_mut(), false, false, None)
+                .map_err(|e| Error::Win32Error(win_error!(e)))?
+        };
 
         Ok(Resources {
             command_queue,
@@ -722,23 +725,17 @@ impl D3D12 {
 
         // Record commands.
         unsafe {
-            command_list.ClearRenderTargetView(
-                rtv_handle,
-                [0.0, 0.2, 0.4, 1.0].as_ptr(),
-                &[],
-            );
+            command_list.ClearRenderTargetView(rtv_handle, [0.0, 0.2, 0.4, 1.0].as_ptr(), &[]);
             command_list.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             command_list.IASetVertexBuffers(0, &[resources.vbv]);
             command_list.DrawInstanced(3, 1, 0, 0);
 
             // Indicate that the back buffer will now be used to present.
-            command_list.ResourceBarrier(
-                &[D3D12::transition_barrier(
-                    &resources.render_targets[resources.frame_index as usize],
-                    D3D12_RESOURCE_STATE_RENDER_TARGET,
-                    D3D12_RESOURCE_STATE_PRESENT,
-                )],
-            );
+            command_list.ResourceBarrier(&[D3D12::transition_barrier(
+                &resources.render_targets[resources.frame_index as usize],
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_PRESENT,
+            )]);
         }
 
         unsafe {

@@ -1,8 +1,16 @@
-pub mod dx12_renderer;
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "x86_64")] {
+        pub mod dx12_renderer;
+        pub mod pica_window;
+        pub mod wgpu_renderer;
+    }
+    else if #[cfg(target_arch = "wasm32")] {
+        pub mod winit_window;
+    }
+}
 pub mod math;
-pub mod pica_window;
-pub mod wgpu_renderer;
 
+#[cfg(target_arch = "x86_64")]
 pub mod pica_time {
     use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
     #[derive(Default, Debug)]
@@ -38,6 +46,7 @@ pub mod pica_time {
     }
 }
 
+#[cfg(target_arch = "x86_64")]
 pub mod pica_mouse {
     use crate::error::Error;
     use std::mem::size_of;
@@ -96,6 +105,7 @@ pub mod pica_mouse {
     }
 }
 
+#[cfg(target_arch = "x86_64")]
 pub mod error {
     use std::{error, fmt};
 
@@ -144,6 +154,7 @@ pub mod error {
 
     // impl error::Error for Win32Error {}
 }
+
 
 /// Some common utilities.
 pub mod utils {
