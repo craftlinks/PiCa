@@ -2,13 +2,14 @@ cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
         pub mod dx12_renderer;
         pub mod pica_window;
-        pub mod wgpu_renderer;
+        //pub mod wgpu_renderer;
     }
     else if #[cfg(target_arch = "wasm32")] {
         pub mod winit_window;
     }
 }
 pub mod math;
+pub mod wgpu_renderer;
 
 #[cfg(target_arch = "x86_64")]
 pub mod pica_time {

@@ -1,7 +1,10 @@
 use crate::math;
+#[cfg(target_arch = "x86_64")]
 use crate::pica_window::Window;
 use glam::{Mat4, Vec3};
 use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
+#[cfg(target_arch = "wasm32")]
+use winit::{window::Window, event::WindowEvent };
 
 pub struct Inputs<'a> {
     pub source: ShaderSource<'a>,
@@ -30,10 +33,20 @@ pub struct WGPURenderer {
     pub project_mat: Mat4,
 }
 
-impl WGPURenderer {
+impl<'a> WGPURenderer {
     pub async fn wgpu_init(window: &Window, inputs: Inputs<'_>) -> WGPURenderer {
-        let size = window.window_attributes.size;
-        let instance = wgpu::Instance::new(wgpu::Backends::DX12);
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "x86_64")] {
+                let size = window.window_attributes.size;
+                let width = size.0;
+                let height = size.1;
+            } else if #[cfg(target_arch = "wasm32")] {
+                let size = window.inner_size();
+                let width = size.width;
+                let height = size.height;
+            }
+        }
+        let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -46,9 +59,17 @@ impl WGPURenderer {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    label: None,
+                    label: Some("Device Features"),
+                    // https://docs.rs/wgpu/0.12.0/wgpu/struct.Features.html
                     features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::default(),
+                    // https://docs.rs/wgpu/0.12.0/wgpu/struct.Limits.html
+                    limits: if cfg!(target_arch = "wasm32") {
+                        // This is a set of limits that is lower even than the [downlevel_defaults()],
+                        // configured to be low enough to support running in the browser using WebGL2.
+                        wgpu::Limits::downlevel_webgl2_defaults()
+                    } else {
+                        wgpu::Limits::default()
+                    },
                 },
                 None,
             )
@@ -57,9 +78,10 @@ impl WGPURenderer {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface.get_preferred_format(&adapter).unwrap(),
-            width: size.0 as u32,
-            height: size.1 as u32,
-            present_mode: wgpu::PresentMode::Fifo,
+            width: width as u32,
+            height: height as u32,
+            // https://docs.rs/wgpu/0.12.0/wgpu/enum.PresentMode.html
+            present_mode: wgpu::PresentMode::Immediate,
         };
         surface.configure(&device, &config);
 
@@ -78,7 +100,7 @@ impl WGPURenderer {
             camera_position,
             look_direction,
             up_direction,
-            size.0 as f32 / size.1 as f32,
+            width as f32 / height as f32,
             math::ProjectionType::PERSPECTIVE,
         );
         let mvp_mat = vp_matrix.view_project_mat * model_mat;
@@ -274,6 +296,27 @@ impl WGPURenderer {
 
         Ok(())
     }
+
+    cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+                pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+                    if new_size.width > 0 && new_size.height > 0 {
+                        self.config.width = new_size.width;
+                        self.config.height = new_size.height;
+                        self.surface.configure(&self.device, &self.config);
+                    }
+                }
+
+                // Think about movinh this out if the renderer, as application specific code
+                pub fn input(&mut self, event: &WindowEvent) -> bool {
+                    false
+                }
+
+                pub fn update(&mut self) {
+                
+                }
+            }
+        }
 }
 
 use math::Vertex;
