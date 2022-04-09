@@ -81,7 +81,7 @@ pub async fn run() {
         // Winit prevents sizing with CSS, so we have to set
         // the size manually when on web.
         use winit::dpi::PhysicalSize;
-        window.set_inner_size(PhysicalSize::new(800, 600));
+        window.set_inner_size(PhysicalSize::new(1600, 1200));
 
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()
@@ -111,9 +111,14 @@ pub async fn run() {
 
     let mut wgpu_renderer = WGPURenderer::wgpu_init(&window, inputs).await;
 
+    let render_start_time = instant::Instant::now();
+
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(window_id) if window_id == window.id() => {
-            wgpu_renderer.update();
+            let now = instant::Instant::now();;
+            let dt = now - render_start_time;
+            
+            wgpu_renderer.update(dt);
             match wgpu_renderer.render() {
                 Ok(_) => {}
                 // Reconfigure the surface if lost

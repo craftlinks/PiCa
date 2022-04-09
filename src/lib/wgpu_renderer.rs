@@ -4,7 +4,7 @@ use crate::pica_window::Window;
 use glam::{Mat4, Vec3};
 use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
 #[cfg(target_arch = "wasm32")]
-use winit::{window::Window, event::WindowEvent };
+use winit::{event::WindowEvent, window::Window};
 
 pub struct Inputs<'a> {
     pub source: ShaderSource<'a>,
@@ -20,6 +20,7 @@ pub struct WGPURenderer {
     pub surface: wgpu::Surface,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
+    pub clear_color: wgpu::Color,
     pub shader: wgpu::ShaderModule,
     pub render_pipeline: wgpu::RenderPipeline,
     pub vertex_buffer: Option<wgpu::Buffer>,
@@ -31,6 +32,11 @@ pub struct WGPURenderer {
     pub model_mat: Mat4,
     pub view_mat: Mat4,
     pub project_mat: Mat4,
+    #[cfg(target_arch = "x86_64")]
+    pub size: (i32, i32),
+    #[cfg(target_arch = "wasm32")]
+    pub size: winit::dpi::PhysicalSize<u32>
+
 }
 
 impl<'a> WGPURenderer {
@@ -84,6 +90,13 @@ impl<'a> WGPURenderer {
             present_mode: wgpu::PresentMode::Immediate,
         };
         surface.configure(&device, &config);
+
+        let clear_color = wgpu::Color {
+            r: 0.03,
+            g: 0.01,
+            b: 0.1,
+            a: 1.0,
+        };
 
         // Load the shaders from disk
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
@@ -164,7 +177,7 @@ impl<'a> WGPURenderer {
             primitive: wgpu::PrimitiveState {
                 topology: inputs.topology,
                 strip_index_format: inputs.strip_index_format,
-                // cull_mode: Some(wgpu::Face::Back),
+                cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -221,6 +234,8 @@ impl<'a> WGPURenderer {
             model_mat,
             view_mat: vp_matrix.view_mat,
             project_mat: vp_matrix.project_mat,
+            clear_color,
+            size,
         };
 
         wgpu_renderer
@@ -253,18 +268,15 @@ impl<'a> WGPURenderer {
                 label: Some("Command Encoder"),
             });
         {
+            // <--mutable borrow of the command encoder needs to be dropped first before we can call encoder.finish()
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
+                // This is what [[location(0)]] in the fragment shader targets
                 color_attachments: &[wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.03,
-                            g: 0.01,
-                            b: 0.1,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(self.clear_color),
                         store: true,
                     },
                 }],
@@ -288,6 +300,7 @@ impl<'a> WGPURenderer {
                 render_pass.draw_indexed(0..self.indices_len as u32, 0, 0..1);
             } else {
                 render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                // This is where [[builtin(vertex_index)]] comes from
                 render_pass.draw(0..self.vertices_len as u32, 0..1);
             }
         }
@@ -298,25 +311,47 @@ impl<'a> WGPURenderer {
     }
 
     cfg_if::cfg_if! {
-            if #[cfg(target_arch = "wasm32")] {
-                pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-                    if new_size.width > 0 && new_size.height > 0 {
-                        self.config.width = new_size.width;
-                        self.config.height = new_size.height;
-                        self.surface.configure(&self.device, &self.config);
-                    }
-                }
-
-                // Think about movinh this out if the renderer, as application specific code
-                pub fn input(&mut self, event: &WindowEvent) -> bool {
-                    false
-                }
-
-                pub fn update(&mut self) {
-                
+        if #[cfg(target_arch = "wasm32")] {
+            pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+                if new_size.width > 0 && new_size.height > 0 {
+                    self.config.width = new_size.width;
+                    self.config.height = new_size.height;
+                    self.surface.configure(&self.device, &self.config);
                 }
             }
+
+            // Think about movinh this out if the renderer, as application specific code
+            pub fn input(&mut self, event: &WindowEvent) -> bool {
+                match event {
+                    WindowEvent::CursorMoved { position, .. } => {
+                        self.clear_color = wgpu::Color {
+                            r: position.x as f64 / self.size.width as f64,
+                            g: position.y as f64 / self.size.height as f64,
+                            b: 1.0,
+                            a: 1.0,
+                        };
+                        true
+                    }
+                    _ => false,
+                }
+            }
+
+            const ANIMATION_SPEED: f32 = 5.0;
+
+            pub fn update(&mut self, dt: std::time::Duration) {
+                let dt = 5.0 * dt.as_secs_f32();
+                let model_mat =
+                    math::create_transforms([0.0, 0.0, 0.0], [dt.sin(), dt.sin() * dt.tanh(), dt.cos()], [1.0, 1.0, 1.0]);
+                let mvp_mat = self.project_mat * self.view_mat * model_mat;
+                let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
+                self.queue.write_buffer(
+                    &self.uniform_buffer,
+                        0,
+                        crate::utils::as_bytes(mvp_ref),
+                );
+            }
         }
+    }
 }
 
 use math::Vertex;
