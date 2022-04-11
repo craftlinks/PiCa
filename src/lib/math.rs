@@ -80,7 +80,7 @@ pub fn create_projection(aspect: f32, is_perspective: ProjectionType) -> Mat4 {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Vertex {
     pub position: [f32; 4],
     pub color: [f32; 4],
