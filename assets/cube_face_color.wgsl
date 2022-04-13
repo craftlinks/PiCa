@@ -9,10 +9,25 @@ struct Output {
     [[location(0)]] vColor : vec4<f32>;
 };
 
+struct InstanceInput {
+    [[location(5)]] model_matrix_0: vec4<f32>;
+    [[location(6)]] model_matrix_1: vec4<f32>;
+    [[location(7)]] model_matrix_2: vec4<f32>;
+    [[location(8)]] model_matrix_3: vec4<f32>;
+};
+
 [[stage(vertex)]]
-fn vs_main([[location(0)]] pos: vec4<f32>, [[location(1)]] color: vec4<f32>) -> Output {
+fn vs_main([[location(0)]] pos: vec4<f32>, [[location(1)]] color: vec4<f32>, instance: InstanceInput) -> Output {
     var output: Output;
-    output.Position = uniforms.mvpMatrix * pos;
+    
+    let model_matrix = mat4x4<f32>(
+        instance.model_matrix_0,
+        instance.model_matrix_1,
+        instance.model_matrix_2,
+        instance.model_matrix_3,
+    );
+    
+    output.Position = uniforms.mvpMatrix * model_matrix * pos;
     output.vColor = color;
     return output;
 }
