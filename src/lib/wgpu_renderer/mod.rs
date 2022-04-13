@@ -7,6 +7,8 @@ use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
 #[cfg(target_arch = "wasm32")]
 use winit::{event::WindowEvent, window::Window};
 
+pub mod camera;
+
 pub struct Instance {
     pub position: Vec3,
     pub rotation: Quat,

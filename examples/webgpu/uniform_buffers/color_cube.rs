@@ -1,10 +1,10 @@
+use glam::{Quat, Vec3};
 use std::borrow::Cow;
 use PiCa::error::Error;
-use PiCa::math::{Vertex, self};
+use PiCa::math::{self, Vertex};
 use PiCa::pica_window::{Window, WindowAttributes};
 use PiCa::utils;
-use PiCa::wgpu_renderer::{WGPURenderer, Instance};
-use glam::{Vec3, Quat};
+use PiCa::wgpu_renderer::{camera::Camera, Instance, InstanceRaw, WGPURenderer};
 
 pub fn cube_positions() -> Vec<[i8; 3]> {
     [
@@ -60,8 +60,8 @@ fn create_instances(num_instances_per_row: u32, instance_displacement: Vec3) -> 
     let instances = (0..num_instances_per_row)
         .flat_map(|z| {
             (0..num_instances_per_row).map(move |x| {
-                let x = x*4;
-                let z = z*4;  
+                let x = x * 4;
+                let z = z * 4;
                 let position = Vec3::new(x as f32, 0.0, z as f32) - instance_displacement;
 
                 let rotation = if position.length_squared() as u32 == 0 {
@@ -77,7 +77,6 @@ fn create_instances(num_instances_per_row: u32, instance_displacement: Vec3) -> 
         .collect::<Vec<Instance>>(); // <- num_instances_per_row^2 instances
     instances
 }
-
 
 pub fn main() -> Result<(), Error> {
     let vertices = create_vertices();
@@ -101,7 +100,7 @@ pub fn main() -> Result<(), Error> {
         vertices: Some(vertices),
         indices: Some(indices),
         camera_position: (5.0, 5.0, 5.0),
-        instances: Some(instances), 
+        instances: Some(instances),
     };
 
     let window_attributes = WindowAttributes::new()
@@ -121,8 +120,11 @@ pub fn main() -> Result<(), Error> {
         // window.push();
 
         let dt = ANIMATION_SPEED * window.time.seconds;
-        let model_mat =
-            math::create_transforms([0.0, 0.0, 0.0], [dt.sin(), 0.0, dt.cos()], [0.15, 0.15, 0.15]);
+        let model_mat = math::create_transforms(
+            [0.0, 0.0, 0.0],
+            [dt.sin(), 0.0, dt.cos()],
+            [0.15, 0.15, 0.15],
+        );
         let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;
         let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
         wgpu_renderer.queue.write_buffer(
@@ -137,16 +139,17 @@ pub fn main() -> Result<(), Error> {
             instance.rotation = amount.mul_quat(current);
         }
         let instance_data = wgpu_renderer
-            .instances.as_ref().unwrap()
+            .instances
+            .as_ref()
+            .unwrap()
             .iter()
             .map(Instance::to_raw)
-            .collect::<Vec<_>>();
+            .collect::<Vec<InstanceRaw>>();
         wgpu_renderer.queue.write_buffer(
             &wgpu_renderer.instance_buffer.as_ref().unwrap(),
             0,
             bytemuck::cast_slice(&instance_data),
         );
-
 
         wgpu_renderer.render().unwrap();
     }
