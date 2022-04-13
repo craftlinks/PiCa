@@ -13,7 +13,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    fn to_raw(&self) -> InstanceRaw {
+    pub fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
             model: (Mat4::from_translation(self.position) * Mat4::from_quat(self.rotation))
                 .to_cols_array_2d(),
@@ -23,12 +23,9 @@ impl Instance {
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable )]
-struct InstanceRaw {
+pub struct InstanceRaw {
     model: [[f32; 4]; 4],
 }
-
-// unsafe impl Pod for InstanceRaw {}
-// unsafe impl Zeroable for InstanceRaw {}
 
 
 impl InstanceRaw {
@@ -113,6 +110,7 @@ pub struct WGPURenderer {
     #[cfg(target_arch = "wasm32")]
     pub size: winit::dpi::PhysicalSize<u32>,
     pub num_instances: Option<u32>,
+    pub instances: Option<Vec<Instance>>,
     #[allow(dead_code)]
     pub instance_buffer: Option<wgpu::Buffer>,
 }
@@ -227,7 +225,7 @@ impl<'a> WGPURenderer {
 
         let mut num_instances = None;
         let mut instance_buffer = None;
-        if let Some(instances) = inputs.instances {
+        if let Some(instances) = inputs.instances.as_ref() {
             num_instances = Some(instances.len() as u32);
             let instance_data = instances
                 .iter()
@@ -236,7 +234,7 @@ impl<'a> WGPURenderer {
             instance_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Instance Buffer"),
                 contents: bytemuck::cast_slice(&instance_data),
-                usage: wgpu::BufferUsages::VERTEX,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             }));
         }
         
@@ -332,6 +330,7 @@ impl<'a> WGPURenderer {
             size,
             num_instances,
             instance_buffer,
+            instances: inputs.instances,
         };
 
         wgpu_renderer

@@ -79,7 +79,6 @@ fn create_instances(num_instances_per_row: u32, instance_displacement: Vec3) -> 
 }
 
 
-
 pub fn main() -> Result<(), Error> {
     let vertices = create_vertices();
     let indices = cube_indices();
@@ -114,7 +113,8 @@ pub fn main() -> Result<(), Error> {
 
     let mut wgpu_renderer = pollster::block_on(WGPURenderer::wgpu_init(window.as_ref(), inputs));
 
-    const ANIMATION_SPEED: f32 = 5.0;
+    const ANIMATION_SPEED: f32 = 1.5;
+    const ROTATION_SPEED: f32 = 0.25 * std::f32::consts::PI / 60.0;
 
     // PiCa window rendering loop
     while window.pull() {
@@ -130,6 +130,23 @@ pub fn main() -> Result<(), Error> {
             0,
             utils::as_bytes(mvp_ref),
         );
+
+        for instance in wgpu_renderer.instances.as_mut().unwrap() {
+            let amount = Quat::from_rotation_y(ROTATION_SPEED);
+            let current = instance.rotation;
+            instance.rotation = amount.mul_quat(current);
+        }
+        let instance_data = wgpu_renderer
+            .instances.as_ref().unwrap()
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+        wgpu_renderer.queue.write_buffer(
+            &wgpu_renderer.instance_buffer.as_ref().unwrap(),
+            0,
+            bytemuck::cast_slice(&instance_data),
+        );
+
 
         wgpu_renderer.render().unwrap();
     }
