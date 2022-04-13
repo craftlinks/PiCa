@@ -83,7 +83,7 @@ pub fn main() -> Result<(), Error> {
     let vertices = create_vertices();
     let indices = cube_indices();
 
-    const NUM_INSTANCES_PER_ROW: u32 = 10;
+    const NUM_INSTANCES_PER_ROW: u32 = 20;
     let instance_displacement: Vec3 = Vec3::new(
         NUM_INSTANCES_PER_ROW as f32,
         0.5,
@@ -122,7 +122,7 @@ pub fn main() -> Result<(), Error> {
 
         let dt = ANIMATION_SPEED * window.time.seconds;
         let model_mat =
-            math::create_transforms([0.0, 1.0, 1.0], [dt.sin(), 0.0, dt.cos()], [0.15, 0.15, 0.15]);
+            math::create_transforms([0.0, 0.0, 0.0], [dt.sin(), 0.0, dt.cos()], [0.15, 0.15, 0.15]);
         let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;
         let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
         wgpu_renderer.queue.write_buffer(
