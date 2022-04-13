@@ -107,7 +107,7 @@ pub fn main() -> Result<(), Error> {
     let window_attributes = WindowAttributes::new()
         .with_title("Cube Color")
         .with_position(50, 50)
-        .with_size(800, 600);
+        .with_size(1200, 1600);
 
     let mut window = Window::new_with_attributes(window_attributes)?;
 
@@ -122,7 +122,7 @@ pub fn main() -> Result<(), Error> {
 
         let dt = ANIMATION_SPEED * window.time.seconds;
         let model_mat =
-            math::create_transforms([0.0, 0.0, 0.0], [dt.sin(), 0.0, dt.cos()], [0.15, 0.15, 0.15]);
+            math::create_transforms([0.0, 1.0, 1.0], [dt.sin(), 0.0, dt.cos()], [0.15, 0.15, 0.15]);
         let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;
         let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
         wgpu_renderer.queue.write_buffer(
