@@ -23,8 +23,6 @@ impl CameraUniform {
             view_proj: Mat4::IDENTITY.to_cols_array_2d(),
         }
     }
-
-    // UPDATED!
     pub fn update_view_proj(&mut self, camera: &camera::Camera, projection: &camera::Projection) {
         self.view_position = Vec4::from((camera.position, 0.0)).to_array(); // Check if this is correct
         self.view_proj = (projection.calc_matrix() * camera.calc_matrix()).to_cols_array_2d();
@@ -265,10 +263,58 @@ impl<'a> WGPURenderer {
             );
         }
 
+        let camera = Camera::new(
+            inputs.camera_position,
+            -90.0_f32.to_radians(),
+            -20.0_f32.to_radians(),
+            0.1,
+            0.001,
+        );
+
+        let projection = camera::Projection::new(
+            config.width,
+            config.height,
+            45.0_f32.to_radians(),
+            0.1,
+            100.0,
+        );
+
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera, &projection);
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("camera_bind_group_layout"),
+            });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("camera_bind_group"),
+        });
+
         // WGPU application dependent code
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&uniform_bind_group_layout],
+            bind_group_layouts: &[&uniform_bind_group_layout, &camera_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -336,53 +382,7 @@ impl<'a> WGPURenderer {
             indices_len = indices.len();
         }
 
-        let camera = Camera::new(
-            inputs.camera_position,
-            -90.0_f32.to_radians(),
-            -20.0_f32.to_radians(),
-            4.0,
-            0.4,
-        );
-
-        let projection = camera::Projection::new(
-            config.width,
-            config.height,
-            45.0_f32.to_radians(),
-            0.1,
-            100.0,
-        );
-
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera, &projection);
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            });
-
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-            label: Some("camera_bind_group"),
-        });
+        
 
         let wgpu_renderer = WGPURenderer {
             device,
@@ -473,6 +473,7 @@ impl<'a> WGPURenderer {
             }
             if let Some(index_buffer) = &self.index_buffer {
                 render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
                 render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
                 render_pass.draw_indexed(
                     0..self.indices_len as u32,
@@ -480,7 +481,7 @@ impl<'a> WGPURenderer {
                     0..self.num_instances.unwrap_or(1),
                 );
             } else {
-                render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
                 // This is where [[builtin(vertex_index)]] comes from
                 render_pass.draw(0..self.vertices_len as u32, 0..1);
             }

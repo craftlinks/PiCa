@@ -60,27 +60,27 @@ impl CameraController {
         self.reset();
         // Process Keyboard
         if window.keys['W' as u8 as usize].down {
-            self.amount_forward = 1.0;
+            self.amount_forward = 0.1;
             println!("forward");
         }
         if window.keys['S' as u8 as usize].down {
-            self.amount_backward = 1.0;
+            self.amount_backward = 0.1;
             println!("backward");
         }
         if window.keys['D' as u8 as usize].down {
-            self.amount_right = 1.0;
+            self.amount_right = 0.1;
             println!("right");
         }
         if window.keys['A' as u8 as usize].down {
-            self.amount_left = 1.0;
+            self.amount_left = 0.1;
             println!("left");
         }
         if window.keys[SPACE].down {
-            self.amount_up = 1.0;
+            self.amount_up = 0.1;
             println!("up");
         }
-        if window.keys[SHIFT].down {
-            self.amount_up = 1.0;
+        if window.keys[CTR].down {
+            self.amount_up = 0.1;
             println!("down");
         }
 
@@ -94,6 +94,8 @@ impl CameraController {
 
         // Process Mouse Scroll
         // SCROLL is currently broken (values between 1.0 and 545), needs fixing
+
+        use crate::pica_window::CTR;
         self.scroll = -(window.mouse.delta_wheel as f32);
         if self.scroll != 0.0 {
             println!("{:?}", self.scroll);

@@ -1,4 +1,4 @@
-use glam::{Quat, Vec3};
+use glam::{Mat4, Quat, Vec3};
 use std::borrow::Cow;
 use PiCa::error::Error;
 use PiCa::math::{self, Vertex};
@@ -59,19 +59,22 @@ fn create_vertices() -> Vec<Vertex> {
 fn create_instances(num_instances_per_row: u32, instance_displacement: Vec3) -> Vec<Instance> {
     let instances = (0..num_instances_per_row)
         .flat_map(|z| {
-            (0..num_instances_per_row).map(move |x| {
-                let x = x * 4;
-                let z = z * 4;
-                let position = Vec3::new(x as f32, 0.0, z as f32) - instance_displacement;
+            (0..num_instances_per_row).flat_map(move |x| {
+                (0..num_instances_per_row).map(move |y| {
+                    let x = x * 4;
+                    let z = z * 4;
+                    let y = y * 4;
+                    let position = Vec3::new(x as f32, y as f32, z as f32) - instance_displacement;
 
-                let rotation = if position.length_squared() as u32 == 0 {
-                    // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                    // as Quaternions can effect scale if they're not created correctly
-                    Quat::from_axis_angle(Vec3::Z, 0.0_f32.to_radians())
-                } else {
-                    Quat::from_axis_angle(position.normalize(), 45.0_f32.to_radians())
-                };
-                Instance { position, rotation }
+                    let rotation = if position.length_squared() as u32 == 0 {
+                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                        // as Quaternions can effect scale if they're not created correctly
+                        Quat::from_axis_angle(Vec3::Z, 0.0_f32.to_radians())
+                    } else {
+                        Quat::from_axis_angle(position.normalize(), 45.0_f32.to_radians())
+                    };
+                    Instance { position, rotation }
+                })
             })
         })
         .collect::<Vec<Instance>>(); // <- num_instances_per_row^2 instances
@@ -99,32 +102,31 @@ pub fn main() -> Result<(), Error> {
         strip_index_format: None, //Some(wgpu::IndexFormat::Uint32),
         vertices: Some(vertices),
         indices: Some(indices),
-        camera_position: Vec3::new(5.0, 5.0, 5.0),
+        camera_position: Vec3::new(0.5, 0.5, 0.5),
         instances: Some(instances),
     };
 
     let window_attributes = WindowAttributes::new()
         .with_title("Cube Color")
         .with_position(50, 50)
-        .with_size(1200, 1600);
+        .with_size(1600, 2000);
 
     let mut window = Window::new_with_attributes(window_attributes)?;
 
     let mut wgpu_renderer = pollster::block_on(WGPURenderer::wgpu_init(window.as_ref(), inputs));
 
-    const ANIMATION_SPEED: f32 = 1.5;
-    const ROTATION_SPEED: f32 = 0.25 * std::f32::consts::PI / 60.0;
+    const ANIMATION_SPEED: f32 = 1.0;
+    const ROTATION_SPEED: f32 = 0.5 * std::f32::consts::PI / 60.0;
 
     let mut prev_time = 0.0;
     // PiCa window rendering loop
     while window.pull() {
         // window.push();
-        
+
         // prev_time = if prev_time < window.time.seconds % 0.5 {
         //     println!("{:?} - {:?}", window.time.seconds.floor(), window.mouse.delta_position);
         //     window.time.seconds.floor()
         // } else {prev_time};
-    
 
         let dt = ANIMATION_SPEED * window.time.seconds;
         let model_mat = math::create_transforms(
@@ -132,7 +134,7 @@ pub fn main() -> Result<(), Error> {
             [dt.sin(), 0.0, dt.cos()],
             [0.15, 0.15, 0.15],
         );
-        let mvp_mat = wgpu_renderer.project_mat * wgpu_renderer.view_mat * model_mat;
+        let mvp_mat = /*wgpu_renderer.project_mat * wgpu_renderer.view_mat*/  model_mat;
         let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
         wgpu_renderer.queue.write_buffer(
             &wgpu_renderer.uniform_buffer,
@@ -159,7 +161,8 @@ pub fn main() -> Result<(), Error> {
         );
 
         wgpu_renderer.camera.update_camera(window.as_mut());
-        wgpu_renderer.camera_uniform
+        wgpu_renderer
+            .camera_uniform
             .update_view_proj(&wgpu_renderer.camera, &wgpu_renderer.projection);
         wgpu_renderer.queue.write_buffer(
             &wgpu_renderer.camera_buffer,

@@ -1,8 +1,16 @@
 struct Uniforms {
     mvpMatrix : mat4x4<f32>;
 };
+[[binding(0), group(0)]]
+var<uniform> uniforms: Uniforms;
 
-[[binding(0), group(0)]] var<uniform> uniforms : Uniforms;
+
+struct Camera {
+    view_pos: vec4<f32>;
+    view_proj: mat4x4<f32>;
+};
+[[group(1), binding(0)]]
+var<uniform> camera: Camera;
 
 struct Output {
     [[builtin(position)]] Position : vec4<f32>;
@@ -27,7 +35,8 @@ fn vs_main([[location(0)]] pos: vec4<f32>, [[location(1)]] color: vec4<f32>, ins
         instance.model_matrix_3,
     );
     
-    output.Position = uniforms.mvpMatrix * model_matrix * pos;
+    // output.Position = uniforms.mvpMatrix * model_matrix * pos;
+    output.Position = camera.view_proj * uniforms.mvpMatrix * model_matrix * pos;
     output.vColor = color;
     return output;
 }
