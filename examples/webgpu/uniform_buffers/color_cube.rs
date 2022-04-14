@@ -99,7 +99,7 @@ pub fn main() -> Result<(), Error> {
         strip_index_format: None, //Some(wgpu::IndexFormat::Uint32),
         vertices: Some(vertices),
         indices: Some(indices),
-        camera_position: (5.0, 5.0, 5.0),
+        camera_position: Vec3::new(5.0, 5.0, 5.0),
         instances: Some(instances),
     };
 
@@ -115,9 +115,16 @@ pub fn main() -> Result<(), Error> {
     const ANIMATION_SPEED: f32 = 1.5;
     const ROTATION_SPEED: f32 = 0.25 * std::f32::consts::PI / 60.0;
 
+    let mut prev_time = 0.0;
     // PiCa window rendering loop
     while window.pull() {
         // window.push();
+        
+        // prev_time = if prev_time < window.time.seconds % 0.5 {
+        //     println!("{:?} - {:?}", window.time.seconds.floor(), window.mouse.delta_position);
+        //     window.time.seconds.floor()
+        // } else {prev_time};
+    
 
         let dt = ANIMATION_SPEED * window.time.seconds;
         let model_mat = math::create_transforms(
@@ -150,6 +157,8 @@ pub fn main() -> Result<(), Error> {
             0,
             bytemuck::cast_slice(&instance_data),
         );
+
+        wgpu_renderer.camera.update_camera(window.as_mut());
 
         wgpu_renderer.render().unwrap();
     }

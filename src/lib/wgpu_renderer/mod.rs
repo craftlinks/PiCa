@@ -1,6 +1,6 @@
-use crate::{math, utils};
 #[cfg(target_arch = "x86_64")]
 use crate::pica_window::Window;
+use crate::{math, utils, wgpu_renderer::camera::Camera};
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
 use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
@@ -24,11 +24,10 @@ impl Instance {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable )]
+#[derive(Copy, Clone, Pod, Zeroable)]
 pub struct InstanceRaw {
     model: [[f32; 4]; 4],
 }
-
 
 impl InstanceRaw {
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
@@ -86,7 +85,7 @@ pub struct Inputs<'a> {
     pub strip_index_format: Option<IndexFormat>,
     pub vertices: Option<Vec<Vertex>>,
     pub indices: Option<Vec<u16>>,
-    pub camera_position: (f32, f32, f32),
+    pub camera_position: Vec3,
     pub instances: Option<Vec<Instance>>,
 }
 
@@ -115,6 +114,7 @@ pub struct WGPURenderer {
     pub instances: Option<Vec<Instance>>,
     #[allow(dead_code)]
     pub instance_buffer: Option<wgpu::Buffer>,
+    pub camera: Camera,
 }
 
 impl<'a> WGPURenderer {
@@ -229,17 +229,15 @@ impl<'a> WGPURenderer {
         let mut instance_buffer = None;
         if let Some(instances) = inputs.instances.as_ref() {
             num_instances = Some(instances.len() as u32);
-            let instance_data = instances
-                .iter()
-                .map(Instance::to_raw)
-                .collect::<Vec<_>>();
-            instance_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Instance Buffer"),
-                contents: bytemuck::cast_slice(&instance_data),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            }));
+            let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+            instance_buffer = Some(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Instance Buffer"),
+                    contents: bytemuck::cast_slice(&instance_data),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                }),
+            );
         }
-        
 
         // WGPU application dependent code
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -312,6 +310,14 @@ impl<'a> WGPURenderer {
             indices_len = indices.len();
         }
 
+        let camera = Camera::new(
+            inputs.camera_position,
+            -90.0_f32.to_radians(),
+            -20.0_f32.to_radians(),
+            4.0,
+            0.4,
+        );
+
         let wgpu_renderer = WGPURenderer {
             device,
             surface,
@@ -333,6 +339,7 @@ impl<'a> WGPURenderer {
             num_instances,
             instance_buffer,
             instances: inputs.instances,
+            camera,
         };
 
         wgpu_renderer
@@ -392,12 +399,16 @@ impl<'a> WGPURenderer {
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             }
             if let Some(instance_buffer) = &self.instance_buffer {
-                render_pass.set_vertex_buffer(1,instance_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
             }
             if let Some(index_buffer) = &self.index_buffer {
                 render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-                render_pass.draw_indexed(0..self.indices_len as u32, 0, 0..self.num_instances.unwrap_or(1));
+                render_pass.draw_indexed(
+                    0..self.indices_len as u32,
+                    0,
+                    0..self.num_instances.unwrap_or(1),
+                );
             } else {
                 render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
                 // This is where [[builtin(vertex_index)]] comes from
