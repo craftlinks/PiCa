@@ -136,10 +136,50 @@ impl Camera {
     #[cfg(target_arch = "x86_64")]
     pub fn update_camera(&mut self, window: &mut Window) {
         self.camera_controller.update(window);
-        
-        // TODO Geert: update the Camera
 
-        
+        let dt = window.time.seconds;
+
+        // Move forward/backward and left/right
+        let (yaw_sin, yaw_cos) = self.yaw.sin_cos();
+        let forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
+        let right = Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
+        self.position += forward
+            * (self.camera_controller.amount_forward - self.camera_controller.amount_backward)
+            * self.camera_controller.speed
+            * dt;
+        self.position += right
+            * (self.camera_controller.amount_right - self.camera_controller.amount_left)
+            * self.camera_controller.speed
+            * dt;
+
+        // Move in/out (aka. "zoom")
+        let (pitch_sin, pitch_cos) = self.pitch.sin_cos();
+        let scrollward = Vec3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
+        self.position += scrollward
+            * self.camera_controller.scroll
+            * self.camera_controller.speed
+            * self.camera_controller.sensitivity
+            * dt;
+        self.camera_controller.scroll = 0.0;
+
+        // Move up/down. Since we don't use roll, we can just
+        // modify the y coordinate directly.
+        self.position.y += (self.camera_controller.amount_up - self.camera_controller.amount_down)
+            * self.camera_controller.speed
+            * dt;
+
+        // Rotate
+        self.yaw +=
+            self.camera_controller.rotate_horizontal * self.camera_controller.sensitivity * dt;
+        self.pitch +=
+            -self.camera_controller.rotate_vertical * self.camera_controller.sensitivity * dt;
+
+        // Keep the camera's angle from going too high/low.
+        if self.pitch < -SAFE_FRAC_PI_2.to_radians() {
+            self.pitch = -SAFE_FRAC_PI_2.to_radians();
+        } else if self.pitch > SAFE_FRAC_PI_2.to_radians() {
+            self.pitch = SAFE_FRAC_PI_2.to_radians();
+        }
     }
 }
 

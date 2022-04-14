@@ -159,6 +159,13 @@ pub fn main() -> Result<(), Error> {
         );
 
         wgpu_renderer.camera.update_camera(window.as_mut());
+        wgpu_renderer.camera_uniform
+            .update_view_proj(&wgpu_renderer.camera, &wgpu_renderer.projection);
+        wgpu_renderer.queue.write_buffer(
+            &wgpu_renderer.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[wgpu_renderer.camera_uniform]),
+        );
 
         wgpu_renderer.render().unwrap();
     }

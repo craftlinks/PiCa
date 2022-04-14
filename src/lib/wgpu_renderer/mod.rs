@@ -2,12 +2,34 @@
 use crate::pica_window::Window;
 use crate::{math, utils, wgpu_renderer::camera::Camera};
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec3, Vec4};
 use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
 #[cfg(target_arch = "wasm32")]
 use winit::{event::WindowEvent, window::Window};
 
 pub mod camera;
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    view_position: [f32; 4],
+    view_proj: [[f32; 4]; 4],
+}
+
+impl CameraUniform {
+    fn new() -> Self {
+        Self {
+            view_position: [0.0; 4],
+            view_proj: Mat4::IDENTITY.to_cols_array_2d(),
+        }
+    }
+
+    // UPDATED!
+    pub fn update_view_proj(&mut self, camera: &camera::Camera, projection: &camera::Projection) {
+        self.view_position = Vec4::from((camera.position, 0.0)).to_array(); // Check if this is correct
+        self.view_proj = (projection.calc_matrix() * camera.calc_matrix()).to_cols_array_2d();
+    }
+}
 
 pub struct Instance {
     pub position: Vec3,
@@ -115,6 +137,10 @@ pub struct WGPURenderer {
     #[allow(dead_code)]
     pub instance_buffer: Option<wgpu::Buffer>,
     pub camera: Camera,
+    pub projection: camera::Projection,
+    pub camera_uniform: CameraUniform,
+    pub camera_buffer: wgpu::Buffer,
+    pub camera_bind_group: wgpu::BindGroup,
 }
 
 impl<'a> WGPURenderer {
@@ -318,6 +344,46 @@ impl<'a> WGPURenderer {
             0.4,
         );
 
+        let projection = camera::Projection::new(
+            config.width,
+            config.height,
+            45.0_f32.to_radians(),
+            0.1,
+            100.0,
+        );
+
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera, &projection);
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("camera_bind_group_layout"),
+            });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("camera_bind_group"),
+        });
+
         let wgpu_renderer = WGPURenderer {
             device,
             surface,
@@ -340,6 +406,10 @@ impl<'a> WGPURenderer {
             instance_buffer,
             instances: inputs.instances,
             camera,
+            projection,
+            camera_uniform,
+            camera_buffer,
+            camera_bind_group,
         };
 
         wgpu_renderer
