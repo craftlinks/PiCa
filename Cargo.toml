@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
+[features]
+wasm = []
 
 [lib]
 name = 'PiCa'
 path = "src/lib/lib.rs"
+crate-type = ["cdylib", "rlib"]
 
 
 [[bin]]
@@ -23,17 +25,38 @@ path = "src/bin/wgpu_triangle.rs"
 name = "glam"
 path = "src/bin/glam.rs"
 
+[[bin]]
+name = "winit_window"
+path = "src/bin/winit_window.rs"
+required-features = ['wasm']
+
 
 [dependencies]
-raw-window-handle = "0.4"
-array-init = "2.0.0"
-wgpu = "0.12.0"
+winit = "0.26"
+cfg-if = "*"
+raw-window-handle = "*"
+array-init = "*"
+wgpu = "*"
 pollster = "*"
 env_logger = "*"
 log = "*"
 glam = '*'
+bytemuck = { version = "1.4", features = [ "derive" ] }
 
-[dependencies.windows]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+console_log = "0.2.0"
+wgpu = { version = "0.12", features = ["webgl"]}
+wasm-bindgen = "0.2.76"
+wasm-bindgen-futures = "0.4"
+instant = {version = "0.1", features = ["wasm-bindgen"]}
+web-sys = { version = "0.3.53", features = [
+    "Document",
+    "Window",
+    "Element",
+]}
+
+[target.'cfg(target_arch = "x86_64")'.dependencies.windows]
 version = "0.35.0"
 features = [
      "Win32_Foundation",

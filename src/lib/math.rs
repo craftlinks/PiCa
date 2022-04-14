@@ -2,10 +2,7 @@ use std::f32::consts::PI;
 
 use glam::{Mat4, Vec3};
 
-pub type Rad = f32;
-pub type Angle = f32;
-
-pub const OPENGL_TO_WGPU_MATRIX: &[f32; 16] = &[
+pub const OPENGL_TO_WGPU_MATRIX: &[f32;16] = &[
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
 ];
 
@@ -46,12 +43,10 @@ pub fn create_view_projection(
 
     let project_mat = match is_perspective {
         ProjectionType::PERSPECTIVE => {
-            Mat4::from_cols_array(OPENGL_TO_WGPU_MATRIX)
-                * Mat4::perspective_rh(2.0 * PI / 5.0, aspect, 0.1, 100.0)
+            Mat4::from_cols_array(OPENGL_TO_WGPU_MATRIX) * Mat4::perspective_rh(2.0 * PI / 5.0, aspect, 0.1, 100.0)
         }
         ProjectionType::ORTHO => {
-            Mat4::from_cols_array(OPENGL_TO_WGPU_MATRIX)
-                * Mat4::orthographic_rh(-4.0, 4.0, -3.0, 3.0, -1.0, 6.0)
+            Mat4::from_cols_array(OPENGL_TO_WGPU_MATRIX) * Mat4::orthographic_rh(-4.0, 4.0, -3.0, 3.0, -1.0, 6.0)
         }
     };
 
@@ -65,19 +60,37 @@ pub fn create_view_projection(
     }
 }
 
-pub fn create_view(camera_position: Vec3, look_direction: Vec3, up_direction: Vec3) -> Mat4 {
+pub fn create_view(
+    camera_position: Vec3,
+    look_direction: Vec3,
+    up_direction: Vec3,
+) -> Mat4 {
     Mat4::look_at_rh(camera_position, look_direction, up_direction)
 }
 pub fn create_projection(aspect: f32, is_perspective: ProjectionType) -> Mat4 {
     let project_mat = match is_perspective {
         ProjectionType::PERSPECTIVE => {
-            Mat4::from_cols_array(OPENGL_TO_WGPU_MATRIX)
-                * Mat4::perspective_rh(2.0 * PI / 5.0, aspect, 0.1, 100.0)
+            Mat4::from_cols_array(OPENGL_TO_WGPU_MATRIX) * Mat4::perspective_rh(2.0 * PI / 5.0, aspect, 0.1, 100.0)
         }
         ProjectionType::ORTHO => {
-            Mat4::from_cols_array(OPENGL_TO_WGPU_MATRIX)
-                * Mat4::orthographic_rh(-4.0, 4.0, -3.0, 3.0, -1.0, 6.0)
+            Mat4::from_cols_array(OPENGL_TO_WGPU_MATRIX) * Mat4::orthographic_rh(-4.0, 4.0, -3.0, 3.0, -1.0, 6.0)
         }
     };
     project_mat
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct Vertex {
+    pub position: [f32; 4],
+    pub color: [f32; 4],
+}
+
+impl Vertex {
+    pub fn vertex(p: [i8; 3], c: [i8; 3]) -> Vertex {
+        Vertex {
+            position: [p[0] as f32, p[1] as f32, p[2] as f32, 1.0],
+            color: [c[0] as f32, c[1] as f32, c[2] as f32, 1.0],
+        }
+}
 }

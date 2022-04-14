@@ -47,6 +47,7 @@ const MAX_TEXT: usize = 256;
 pub const ALT: usize = 0x12;
 pub const CTR: usize = 0x11;
 pub const SHIFT: usize = 0x10;
+pub const SPACE: usize = 0x20;
 
 /// Window Attributes for creating a new PiCa window.
 #[derive(Debug)]
