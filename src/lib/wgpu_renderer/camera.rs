@@ -55,6 +55,7 @@ impl CameraController {
         self.scroll = 0.0;
     }
 
+    #[cfg(target_arch = "x86_64")]
     pub fn update(&mut self, window: &Window) {
         self.reset();
         // Process Keyboard
