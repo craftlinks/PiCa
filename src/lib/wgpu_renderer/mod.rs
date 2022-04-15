@@ -1,11 +1,10 @@
-#[cfg(target_arch = "x86_64")]
+use std::borrow::Cow;
+
 use crate::pica_window::Window;
-use crate::{math, utils, wgpu_renderer::camera::Camera};
+use crate::{math, wgpu_renderer::camera::Camera};
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3, Vec4};
 use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
-#[cfg(target_arch = "wasm32")]
-use winit::{event::WindowEvent, window::Window};
 
 pub mod camera;
 
@@ -99,7 +98,7 @@ impl Vertex {
     }
 }
 
-pub struct Inputs<'a> {
+pub struct RendererAttributes<'a> {
     pub source: ShaderSource<'a>,
     pub topology: PrimitiveTopology,
     pub strip_index_format: Option<IndexFormat>,
@@ -107,6 +106,22 @@ pub struct Inputs<'a> {
     pub indices: Option<Vec<u16>>,
     pub camera_position: Vec3,
     pub instances: Option<Vec<Instance>>,
+}
+
+impl<'a> Default for RendererAttributes<'a> {
+    fn default() -> Self {
+        Self {
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+            "../../../assets/cube_face_color.wgsl"
+        ))),
+            topology: Default::default(),
+            strip_index_format: Default::default(),
+            vertices: Default::default(),
+            indices: Default::default(),
+            camera_position: Vec3::new(0.5, 0.5, 0.5),
+            instances: Default::default(),
+        }
+    }
 }
 
 pub struct WGPURenderer {
@@ -126,13 +141,9 @@ pub struct WGPURenderer {
     pub model_mat: Mat4,
     pub view_mat: Mat4,
     pub project_mat: Mat4,
-    #[cfg(target_arch = "x86_64")]
     pub size: (i32, i32),
-    #[cfg(target_arch = "wasm32")]
-    pub size: winit::dpi::PhysicalSize<u32>,
     pub num_instances: Option<u32>,
     pub instances: Option<Vec<Instance>>,
-    #[allow(dead_code)]
     pub instance_buffer: Option<wgpu::Buffer>,
     pub camera: Camera,
     pub projection: camera::Projection,
@@ -142,18 +153,15 @@ pub struct WGPURenderer {
 }
 
 impl<'a> WGPURenderer {
-    pub async fn wgpu_init(window: &Window, inputs: Inputs<'_>) -> WGPURenderer {
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "x86_64")] {
-                let size = window.window_attributes.size;
-                let width = size.0;
-                let height = size.1;
-            } else if #[cfg(target_arch = "wasm32")] {
-                let size = window.inner_size();
-                let width = size.width;
-                let height = size.height;
-            }
-        }
+    pub async fn new(window: &Window) -> WGPURenderer {
+        let attributes = RendererAttributes::default();
+        WGPURenderer::new_with_attributes(window, attributes).await
+    }
+
+    async fn new_with_attributes(window: &Window, inputs: RendererAttributes<'_>) -> WGPURenderer {
+        let size = window.window_attributes.size;
+        let width = size.0;
+        let height = size.1;
         let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
@@ -382,8 +390,6 @@ impl<'a> WGPURenderer {
             indices_len = indices.len();
         }
 
-        
-
         let wgpu_renderer = WGPURenderer {
             device,
             surface,
@@ -490,48 +496,5 @@ impl<'a> WGPURenderer {
         frame.present();
 
         Ok(())
-    }
-
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-                if new_size.width > 0 && new_size.height > 0 {
-                    self.config.width = new_size.width;
-                    self.config.height = new_size.height;
-                    self.surface.configure(&self.device, &self.config);
-                }
-            }
-
-            // Think about movinh this out if the renderer, as application specific code
-            pub fn input(&mut self, event: &WindowEvent) -> bool {
-                match event {
-                    WindowEvent::CursorMoved { position, .. } => {
-                        self.clear_color = wgpu::Color {
-                            r: position.x as f64 / self.size.width as f64,
-                            g: position.y as f64 / self.size.height as f64,
-                            b: 1.0,
-                            a: 1.0,
-                        };
-                        true
-                    }
-                    _ => false,
-                }
-            }
-
-            const ANIMATION_SPEED: f32 = 5.0;
-
-            pub fn update(&mut self, dt: std::time::Duration) {
-                let dt = 5.0 * dt.as_secs_f32();
-                let model_mat =
-                    math::create_transforms([0.0, 0.0, 0.0], [dt.sin(), dt.sin() * dt.tanh(), dt.cos()], [1.0, 1.0, 1.0]);
-                let mvp_mat = self.project_mat * self.view_mat * model_mat;
-                let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
-                self.queue.write_buffer(
-                    &self.uniform_buffer,
-                        0,
-                        crate::utils::as_bytes(mvp_ref),
-                );
-            }
-        }
     }
 }

@@ -8,32 +8,31 @@ edition = "2021"
 wasm = []
 
 [lib]
-name = 'PiCa'
+name = 'pica'
 path = "src/lib/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
-
 [[bin]]
+name = 'app'
+path = "src/bin/app.rs"
+
+[[example]]
+name = "wgpu-line3d"
+path = "examples/webgpu/line3d.rs"
+
+[[example]]
 name = "dx12-triangle"
-path = "src/bin/dx12_triangle.rs"
+path = "examples/dx12/dx12_triangle.rs"
 
-[[bin]]
+[[example]]
+name = "wgpu-cube"
+path = "examples/webgpu/wgpu_cube.rs"
+
+[[example]]
 name = "wgpu-triangle"
-path = "src/bin/wgpu_triangle.rs"
-
-[[bin]]
-name = "glam"
-path = "src/bin/glam.rs"
-
-[[bin]]
-name = "winit_window"
-path = "src/bin/winit_window.rs"
-required-features = ['wasm']
-
+path = "examples/webgpu/wgpu_triangle.rs"
 
 [dependencies]
-winit = "0.26"
-cfg-if = "*"
 raw-window-handle = "*"
 array-init = "*"
 wgpu = "*"
@@ -43,18 +42,7 @@ log = "*"
 glam = '*'
 bytemuck = { version = "1.4", features = [ "derive" ] }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.6"
-console_log = "0.2.0"
-wgpu = { version = "0.12", features = ["webgl"]}
-wasm-bindgen = "0.2.76"
-wasm-bindgen-futures = "0.4"
-instant = {version = "0.1", features = ["wasm-bindgen"]}
-web-sys = { version = "0.3.53", features = [
-    "Document",
-    "Window",
-    "Element",
-]}
+
 
 [target.'cfg(target_arch = "x86_64")'.dependencies.windows]
 version = "0.35.0"
@@ -77,27 +65,3 @@ features = [
      "Win32_Security",
      "Win32_System_WindowsProgramming",
 ]
-
-[[example]]
-name = "point_line"
-path = "examples/webgpu/primitives/point_line.rs"
-
-[[example]]
-name = "triangles"
-path = "examples/webgpu/primitives/triangles.rs"
-
-[[example]]
-name = "buffer_triangle"
-path = "examples/webgpu/gpu_buffers/buffer_triangle.rs"
-
-[[example]]
-name = "square_index"
-path = "examples/webgpu/gpu_buffers/square_index.rs"
-
-[[example]]
-name = "line3d"
-path = "examples/webgpu/uniform_buffers/line3d.rs"
-
-[[example]]
-name = "color_cube"
-path = "examples/webgpu/uniform_buffers/color_cube.rs"

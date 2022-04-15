@@ -1,13 +1,13 @@
 use std::borrow::Cow;
-use PiCa::error::Error;
-use PiCa::pica_window::{Window, WindowAttributes};
-use PiCa::wgpu_renderer::{Inputs, WGPURenderer};
+use pica::error::Error;
+use pica::pica_window::{Window, WindowAttributes};
+use pica::wgpu_renderer::{RendererAttributes, WGPURenderer};
 
 pub fn main() -> Result<(), Error> {
 
-    // Create a PiCa window
+    // Create a pica window
     let window_attributes = WindowAttributes::new()
-        .with_title("Awesome PiCa Simulation")
+        .with_title("Awesome pica Simulation")
         .with_position(50, 50)
         .with_size(800, 800);
 
@@ -17,7 +17,7 @@ pub fn main() -> Result<(), Error> {
     env_logger::init();
 
     // Define the inputs for the WGPURenderer
-    let inputs = Inputs {
+    let inputs = RendererAttributes {
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../../assets/shader.wgsl"))),
         topology: wgpu::PrimitiveTopology::TriangleList,
         strip_index_format: None,
@@ -29,7 +29,7 @@ pub fn main() -> Result<(), Error> {
     // WGPURenderer initialization
     let mut wgpu_renderer = pollster::block_on(WGPURenderer::wgpu_init(window.as_ref(), inputs));
 
-    // PiCa window rendering loop
+    // pica window rendering loop
     while window.pull() {
         window.push();
         

@@ -3,7 +3,7 @@ use std::f32::consts::FRAC_PI_2;
 use glam::{Mat4, Vec3};
 
 use crate::pica_window::Window;
-use crate::pica_window::{SHIFT, SPACE};
+use crate::pica_window::{SPACE};
 
 pub const OPENGL_TO_WGPU_MATRIX: &[f32; 16] = &[
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,

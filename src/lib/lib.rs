@@ -1,17 +1,45 @@
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "x86_64")] {
-        pub mod dx12_renderer;
-        pub mod pica_window;
-        //pub mod wgpu_renderer;
+use pica_window::WindowAttributes;
+use wgpu_renderer::RendererAttributes;
+
+pub mod dx12_renderer;
+pub mod pica_window;
+pub mod math;
+mod wgpu_renderer;
+
+pub type Result<T> = std::result::Result<T, crate::error::Error>;
+
+
+
+pub struct PiCa {
+    window: Box<pica_window::Window>,
+    renderer: wgpu_renderer::WGPURenderer,
+}
+
+impl PiCa {
+    pub fn new() -> Result<Self> {
+        let window = pica_window::Window::new()?;
+        let renderer = pollster::block_on(wgpu_renderer::WGPURenderer::new(window.as_ref()));
+
+        Ok(Self {
+            window,
+            renderer,
+        })
     }
-    else if #[cfg(target_arch = "wasm32")] {
-        pub mod winit_window;
+
+    pub fn pull(&mut self) -> bool {
+        self.window.pull()
+    }
+
+    pub fn set_window_attributes(&mut self, window_attributes: WindowAttributes) {
+        todo!()
+    }
+
+    pub fn set_renderer_attributes(&mut self, renderer_attributes: RendererAttributes) {
+        todo!()
     }
 }
-pub mod math;
-pub mod wgpu_renderer;
 
-#[cfg(target_arch = "x86_64")]
+
 pub mod pica_time {
     use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
     #[derive(Default, Debug)]
@@ -47,7 +75,6 @@ pub mod pica_time {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 pub mod pica_mouse {
     use crate::error::Error;
     use std::mem::size_of;
@@ -106,7 +133,6 @@ pub mod pica_mouse {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 pub mod error {
     use std::{error, fmt};
 
@@ -155,7 +181,6 @@ pub mod error {
 
     // impl error::Error for Win32Error {}
 }
-
 
 /// Some common utilities.
 pub mod utils {

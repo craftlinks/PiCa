@@ -1,12 +1,12 @@
 use std::time::{Duration, Instant};
 
-use PiCa::error::Error;
-use PiCa::pica_mouse::{Button, Mouse};
-use PiCa::pica_window::{Window, WindowAttributes, CTR, ALT, SHIFT, };
+use pica::error::Error;
+use pica::pica_mouse::{Button, Mouse};
+use pica::pica_window::{Window, WindowAttributes, CTR, ALT, SHIFT, };
 
 pub fn main() -> Result<(), Error> {
     let window_attributes = WindowAttributes::new()
-        .with_title("Awesome PiCa Simulation")
+        .with_title("Awesome pica Simulation")
         .with_position(50, 50)
         .with_size(800, 600);
 

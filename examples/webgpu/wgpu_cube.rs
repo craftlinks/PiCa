@@ -1,10 +1,10 @@
 use glam::{Mat4, Quat, Vec3};
 use std::borrow::Cow;
-use PiCa::error::Error;
-use PiCa::math::{self, Vertex};
-use PiCa::pica_window::{Window, WindowAttributes};
-use PiCa::utils;
-use PiCa::wgpu_renderer::{camera::Camera, Instance, InstanceRaw, WGPURenderer};
+use pica::error::Error;
+use pica::math::{self, Vertex};
+use pica::pica_window::{Window, WindowAttributes};
+use pica::utils;
+use pica::wgpu_renderer::{camera::Camera, Instance, InstanceRaw, WGPURenderer};
 
 pub fn cube_positions() -> Vec<[i8; 3]> {
     [
@@ -94,9 +94,9 @@ pub fn main() -> Result<(), Error> {
 
     let instances = create_instances(NUM_INSTANCES_PER_ROW, instance_displacement);
 
-    let inputs = PiCa::wgpu_renderer::Inputs {
+    let inputs = pica::wgpu_renderer::RendererAttributes {
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-            "../../../assets/cube_face_color.wgsl"
+            "../../assets/cube_face_color.wgsl"
         ))),
         topology: wgpu::PrimitiveTopology::TriangleList,
         strip_index_format: None, //Some(wgpu::IndexFormat::Uint32),
@@ -113,13 +113,12 @@ pub fn main() -> Result<(), Error> {
 
     let mut window = Window::new_with_attributes(window_attributes)?;
 
-    let mut wgpu_renderer = pollster::block_on(WGPURenderer::wgpu_init(window.as_ref(), inputs));
+    let mut wgpu_renderer = pollster::block_on(WGPURenderer::new_with_attributes(window.as_ref(), inputs));
 
     const ANIMATION_SPEED: f32 = 1.0;
     const ROTATION_SPEED: f32 = 0.5 * std::f32::consts::PI / 60.0;
 
-    let mut prev_time = 0.0;
-    // PiCa window rendering loop
+    // pica window rendering loop
     while window.pull() {
         // window.push();
 
