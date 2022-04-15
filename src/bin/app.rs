@@ -7,7 +7,7 @@ pub fn main() {
     // Optional: set windows attributes
     let window_attributes =
         WindowAttributes::new()
-            .with_title("Cube Color")
+            .with_title("PiCa application")
             .with_position(50, 50)
             .with_size(1600, 2000);
 
