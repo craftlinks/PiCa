@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use crate::pica_window::Window;
+use crate::utils;
 use crate::{math, wgpu_renderer::camera::Camera};
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3, Vec4};
@@ -158,7 +159,7 @@ impl<'a> WGPURenderer {
         WGPURenderer::new_with_attributes(window, attributes).await
     }
 
-    async fn new_with_attributes(window: &Window, inputs: RendererAttributes<'_>) -> WGPURenderer {
+    pub async fn new_with_attributes(window: &Window, inputs: RendererAttributes<'_>) -> WGPURenderer {
         let size = window.window_attributes.size;
         let width = size.0;
         let height = size.1;
@@ -419,6 +420,30 @@ impl<'a> WGPURenderer {
         };
 
         wgpu_renderer
+    }
+
+    pub fn write_uniform(&mut self, data:&[f32; 16]) {
+        self.queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            utils::as_bytes(data),
+        );
+    }
+
+    pub fn write_instances(&mut self, data: Vec<InstanceRaw>) {
+        self.queue.write_buffer(
+            &self.instance_buffer.as_ref().unwrap(),
+            0,
+            bytemuck::cast_slice(&data),
+        );
+    }
+
+    pub fn write_camera(&mut self, data: &[CameraUniform]) {
+            self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            utils::as_bytes(data),
+        );
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {

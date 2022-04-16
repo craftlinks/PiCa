@@ -120,12 +120,6 @@ pub fn main() -> Result<(), Error> {
 
     // pica window rendering loop
     while window.pull() {
-        // window.push();
-
-        // prev_time = if prev_time < window.time.seconds % 0.5 {
-        //     println!("{:?} - {:?}", window.time.seconds.floor(), window.mouse.delta_position);
-        //     window.time.seconds.floor()
-        // } else {prev_time};
 
         let dt = ANIMATION_SPEED * window.time.seconds;
         let model_mat = math::create_transforms(
@@ -133,13 +127,9 @@ pub fn main() -> Result<(), Error> {
             [dt.sin(), 0.0, dt.cos()],
             [0.15, 0.15, 0.15],
         );
-        let mvp_mat = /*wgpu_renderer.project_mat * wgpu_renderer.view_mat*/  model_mat;
+        let mvp_mat = model_mat;
         let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
-        wgpu_renderer.queue.write_buffer(
-            &wgpu_renderer.uniform_buffer,
-            0,
-            utils::as_bytes(mvp_ref),
-        );
+        wgpu_renderer.write_uniform(mvp_ref);
 
         for instance in wgpu_renderer.instances.as_mut().unwrap() {
             let amount = Quat::from_rotation_y(ROTATION_SPEED);
@@ -153,21 +143,15 @@ pub fn main() -> Result<(), Error> {
             .iter()
             .map(Instance::to_raw)
             .collect::<Vec<InstanceRaw>>();
-        wgpu_renderer.queue.write_buffer(
-            &wgpu_renderer.instance_buffer.as_ref().unwrap(),
-            0,
-            bytemuck::cast_slice(&instance_data),
-        );
+        
+        wgpu_renderer.write_instances(instance_data);
 
         wgpu_renderer.camera.update_camera(window.as_mut());
         wgpu_renderer
             .camera_uniform
             .update_view_proj(&wgpu_renderer.camera, &wgpu_renderer.projection);
-        wgpu_renderer.queue.write_buffer(
-            &wgpu_renderer.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[wgpu_renderer.camera_uniform]),
-        );
+        
+        wgpu_renderer.write_camera(&[wgpu_renderer.camera_uniform]);
 
         wgpu_renderer.render().unwrap();
     }

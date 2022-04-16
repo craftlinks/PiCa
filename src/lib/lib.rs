@@ -4,40 +4,9 @@ use wgpu_renderer::RendererAttributes;
 pub mod dx12_renderer;
 pub mod pica_window;
 pub mod math;
-mod wgpu_renderer;
+pub mod wgpu_renderer;
 
 pub type Result<T> = std::result::Result<T, crate::error::Error>;
-
-
-
-pub struct PiCa {
-    window: Box<pica_window::Window>,
-    renderer: wgpu_renderer::WGPURenderer,
-}
-
-impl PiCa {
-    pub fn new() -> Result<Self> {
-        let window = pica_window::Window::new()?;
-        let renderer = pollster::block_on(wgpu_renderer::WGPURenderer::new(window.as_ref()));
-
-        Ok(Self {
-            window,
-            renderer,
-        })
-    }
-
-    pub fn pull(&mut self) -> bool {
-        self.window.pull()
-    }
-
-    pub fn set_window_attributes(&mut self, window_attributes: WindowAttributes) {
-        todo!()
-    }
-
-    pub fn set_renderer_attributes(&mut self, renderer_attributes: RendererAttributes) {
-        todo!()
-    }
-}
 
 
 pub mod pica_time {
