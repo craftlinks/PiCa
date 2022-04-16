@@ -5,6 +5,7 @@ use crate::utils;
 use crate::{math, wgpu_renderer::camera::Camera};
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3, Vec4};
+use wgpu::ShaderModule;
 use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
 
 pub mod camera;
@@ -86,7 +87,22 @@ impl InstanceRaw {
     }
 }
 
-use math::Vertex;
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct Vertex {
+    pub position: [f32; 4],
+    pub color: [f32; 4],
+}
+
+impl Vertex {
+    pub fn vertex(p: [i8; 3], c: [i8; 3]) -> Vertex {
+        Vertex {
+            position: [p[0] as f32, p[1] as f32, p[2] as f32, 1.0],
+            color: [c[0] as f32, c[1] as f32, c[2] as f32, 1.0],
+        }
+    }
+}
+
 impl Vertex {
     const ATTRIBUTES: [wgpu::VertexAttribute; 2] =
         wgpu::vertex_attr_array![0=>Float32x4, 1=>Float32x4];
@@ -99,8 +115,8 @@ impl Vertex {
     }
 }
 
-pub struct RendererAttributes<'a> {
-    pub source: ShaderSource<'a>,
+pub struct RendererAttributes {
+    pub source: &'static str,
     pub topology: PrimitiveTopology,
     pub strip_index_format: Option<IndexFormat>,
     pub vertices: Option<Vec<Vertex>>,
@@ -109,12 +125,12 @@ pub struct RendererAttributes<'a> {
     pub instances: Option<Vec<Instance>>,
 }
 
-impl<'a> Default for RendererAttributes<'a> {
+impl Default for RendererAttributes {
     fn default() -> Self {
         Self {
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+            source: include_str!(
             "../../../assets/cube_face_color.wgsl"
-        ))),
+        ),
             topology: Default::default(),
             strip_index_format: Default::default(),
             vertices: Default::default(),
@@ -140,8 +156,6 @@ pub struct WGPURenderer {
     pub uniform_buffer: wgpu::Buffer,
     pub uniform_bind_group: wgpu::BindGroup,
     pub model_mat: Mat4,
-    pub view_mat: Mat4,
-    pub project_mat: Mat4,
     pub size: (i32, i32),
     pub num_instances: Option<u32>,
     pub instances: Option<Vec<Instance>>,
@@ -153,13 +167,16 @@ pub struct WGPURenderer {
     pub camera_bind_group: wgpu::BindGroup,
 }
 
-impl<'a> WGPURenderer {
+impl WGPURenderer {
     pub async fn new(window: &Window) -> WGPURenderer {
         let attributes = RendererAttributes::default();
         WGPURenderer::new_with_attributes(window, attributes).await
     }
 
-    pub async fn new_with_attributes(window: &Window, inputs: RendererAttributes<'_>) -> WGPURenderer {
+    pub async fn new_with_attributes(
+        window: &Window,
+        renderer_attributes: RendererAttributes,
+    ) -> WGPURenderer {
         let size = window.window_attributes.size;
         let width = size.0;
         let height = size.1;
@@ -209,31 +226,76 @@ impl<'a> WGPURenderer {
             a: 1.0,
         };
 
-        // Load the shaders from disk
+        // LOAD SHADER ///////////////////////////////////////////////////////////////////////////////////////
+        
+        let shader_source = wgpu::ShaderSource::Wgsl(Cow::Borrowed(renderer_attributes.source));
+        
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: inputs.source,
+            source: shader_source,
         });
 
-        // uniform data
-        let camera_position = inputs.camera_position.into();
-        let look_direction = (0.0, 0.0, 0.0).into();
-        let up_direction = Vec3::Y;
+
+        
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////
+        // VERTEX BUFFER
+
+        let mut vertex_buffer = None;
+        let mut vertices_len: usize = 9;
+        if let Some(vertices) = renderer_attributes.vertices {
+            vertex_buffer = Some(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: crate::utils::as_bytes(vertices.as_slice()), // Everybody uses the Bytemuck crate here
+                    usage: wgpu::BufferUsages::VERTEX,
+                }),
+            );
+            vertices_len = vertices.len();
+        }
+
+
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // INDEX BUFFER
+
+        let mut index_buffer = None;
+        let mut indices_len = 0;
+
+        if let Some(indices) = renderer_attributes.indices {
+            index_buffer = Some(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: crate::utils::as_bytes(indices.as_slice()),
+                    usage: wgpu::BufferUsages::INDEX,
+                }),
+            );
+            indices_len = indices.len();
+        }
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // INSTANCE BUFFER
+        let mut num_instances = None;
+        let mut instance_buffer = None;
+        if let Some(instances) = renderer_attributes.instances.as_ref() {
+            num_instances = Some(instances.len() as u32);
+            let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+            instance_buffer = Some(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Instance Buffer"),
+                    contents: bytemuck::cast_slice(&instance_data),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                }),
+            );
+        }
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////
+        // uniform buffer - global transformation
         let model_mat = math::create_transforms([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
-        let vp_matrix = math::create_view_projection(
-            camera_position,
-            look_direction,
-            up_direction,
-            width as f32 / height as f32,
-            math::ProjectionType::PERSPECTIVE,
-        );
-        let mvp_mat = vp_matrix.view_project_mat * model_mat;
-        let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
-            contents: crate::utils::as_bytes(mvp_ref),
+            contents: crate::utils::as_bytes(model_mat.as_ref()),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
+
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
@@ -258,22 +320,12 @@ impl<'a> WGPURenderer {
             label: Some("Uniform Bind Group"),
         });
 
-        let mut num_instances = None;
-        let mut instance_buffer = None;
-        if let Some(instances) = inputs.instances.as_ref() {
-            num_instances = Some(instances.len() as u32);
-            let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-            instance_buffer = Some(
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Instance Buffer"),
-                    contents: bytemuck::cast_slice(&instance_data),
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                }),
-            );
-        }
 
+
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // uniform buffer - Camera
         let camera = Camera::new(
-            inputs.camera_position,
+            renderer_attributes.camera_position,
             -90.0_f32.to_radians(),
             -20.0_f32.to_radians(),
             0.1,
@@ -320,7 +372,8 @@ impl<'a> WGPURenderer {
             label: Some("camera_bind_group"),
         });
 
-        // WGPU application dependent code
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // RENDER PIPELINE
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[&uniform_bind_group_layout, &camera_bind_group_layout],
@@ -348,8 +401,8 @@ impl<'a> WGPURenderer {
                 }],
             }),
             primitive: wgpu::PrimitiveState {
-                topology: inputs.topology,
-                strip_index_format: inputs.strip_index_format,
+                topology: renderer_attributes.topology,
+                strip_index_format: renderer_attributes.strip_index_format,
                 cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
@@ -363,33 +416,6 @@ impl<'a> WGPURenderer {
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
         });
-
-        let mut vertex_buffer = None;
-        let mut vertices_len: usize = 9;
-        if let Some(vertices) = inputs.vertices {
-            vertex_buffer = Some(
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Vertex Buffer"),
-                    contents: crate::utils::as_bytes(vertices.as_slice()), // Everybody uses the Bytemuck crate here
-                    usage: wgpu::BufferUsages::VERTEX,
-                }),
-            );
-            vertices_len = vertices.len();
-        }
-
-        let mut index_buffer = None;
-        let mut indices_len = 0;
-
-        if let Some(indices) = inputs.indices {
-            index_buffer = Some(
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Index Buffer"),
-                    contents: crate::utils::as_bytes(indices.as_slice()),
-                    usage: wgpu::BufferUsages::INDEX,
-                }),
-            );
-            indices_len = indices.len();
-        }
 
         let wgpu_renderer = WGPURenderer {
             device,
@@ -405,13 +431,11 @@ impl<'a> WGPURenderer {
             uniform_buffer,
             uniform_bind_group,
             model_mat,
-            view_mat: vp_matrix.view_mat,
-            project_mat: vp_matrix.project_mat,
             clear_color,
             size,
             num_instances,
             instance_buffer,
-            instances: inputs.instances,
+            instances: renderer_attributes.instances,
             camera,
             projection,
             camera_uniform,
@@ -494,7 +518,11 @@ impl<'a> WGPURenderer {
                     stencil_ops: None,
                 }),
             });
+
+            // RENDER PIPELINE
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
             if let Some(vertex_buffer) = &self.vertex_buffer {
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
@@ -504,18 +532,18 @@ impl<'a> WGPURenderer {
             }
             if let Some(index_buffer) = &self.index_buffer {
                 render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-                render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
                 render_pass.draw_indexed(
                     0..self.indices_len as u32,
                     0,
                     0..self.num_instances.unwrap_or(1),
                 );
-            } else {
-                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-                // This is where [[builtin(vertex_index)]] comes from
-                render_pass.draw(0..self.vertices_len as u32, 0..1);
             }
+            
+            // } else {
+            //     render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            //     // This is where [[builtin(vertex_index)]] comes from
+            //     render_pass.draw(0..self.vertices_len as u32, 0..1);
+            // }
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();

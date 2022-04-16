@@ -78,19 +78,3 @@ pub fn create_projection(aspect: f32, is_perspective: ProjectionType) -> Mat4 {
     };
     project_mat
 }
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct Vertex {
-    pub position: [f32; 4],
-    pub color: [f32; 4],
-}
-
-impl Vertex {
-    pub fn vertex(p: [i8; 3], c: [i8; 3]) -> Vertex {
-        Vertex {
-            position: [p[0] as f32, p[1] as f32, p[2] as f32, 1.0],
-            color: [c[0] as f32, c[1] as f32, c[2] as f32, 1.0],
-        }
-}
-}

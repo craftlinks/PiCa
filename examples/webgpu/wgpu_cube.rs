@@ -1,10 +1,10 @@
 use glam::{Mat4, Quat, Vec3};
-use std::borrow::Cow;
 use pica::error::Error;
 use pica::math::{self, Vertex};
 use pica::pica_window::{Window, WindowAttributes};
 use pica::utils;
 use pica::wgpu_renderer::{camera::Camera, Instance, InstanceRaw, WGPURenderer};
+use std::borrow::Cow;
 
 pub fn cube_positions() -> Vec<[i8; 3]> {
     [
@@ -94,10 +94,8 @@ pub fn main() -> Result<(), Error> {
 
     let instances = create_instances(NUM_INSTANCES_PER_ROW, instance_displacement);
 
-    let inputs = pica::wgpu_renderer::RendererAttributes {
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-            "../../assets/cube_face_color.wgsl"
-        ))),
+    let render_attributes = pica::wgpu_renderer::RendererAttributes {
+        source: include_str!("../../assets/cube_face_color.wgsl"),
         topology: wgpu::PrimitiveTopology::TriangleList,
         strip_index_format: None, //Some(wgpu::IndexFormat::Uint32),
         vertices: Some(vertices),
@@ -113,14 +111,14 @@ pub fn main() -> Result<(), Error> {
 
     let mut window = Window::new_with_attributes(window_attributes)?;
 
-    let mut wgpu_renderer = pollster::block_on(WGPURenderer::new_with_attributes(window.as_ref(), inputs));
+    let mut wgpu_renderer =
+        pollster::block_on(WGPURenderer::new_with_attributes(window.as_ref(), render_attributes));
 
     const ANIMATION_SPEED: f32 = 1.0;
     const ROTATION_SPEED: f32 = 0.5 * std::f32::consts::PI / 60.0;
 
     // pica window rendering loop
     while window.pull() {
-
         let dt = ANIMATION_SPEED * window.time.seconds;
         let model_mat = math::create_transforms(
             [0.0, 0.0, 0.0],
@@ -143,14 +141,14 @@ pub fn main() -> Result<(), Error> {
             .iter()
             .map(Instance::to_raw)
             .collect::<Vec<InstanceRaw>>();
-        
+
         wgpu_renderer.write_instances(instance_data);
 
         wgpu_renderer.camera.update_camera(window.as_mut());
         wgpu_renderer
             .camera_uniform
             .update_view_proj(&wgpu_renderer.camera, &wgpu_renderer.projection);
-        
+
         wgpu_renderer.write_camera(&[wgpu_renderer.camera_uniform]);
 
         wgpu_renderer.render().unwrap();
