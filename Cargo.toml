@@ -36,6 +36,9 @@ path = "examples/webgpu/wgpu_triangle.rs"
 name = "wgpu-mesh"
 path = "examples/webgpu/wgpu_mesh.rs"
 
+[[example]]
+name = "gpu-info"
+path = "examples/webgpu/gpu.rs"
 
 [build-dependencies]
 cc = "*"

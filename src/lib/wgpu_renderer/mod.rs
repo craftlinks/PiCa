@@ -222,7 +222,11 @@ impl WGPURenderer {
             // https://docs.rs/wgpu/0.12.0/wgpu/enum.PresentMode.html
             present_mode: wgpu::PresentMode::Immediate,
         };
+        // main window swap chain
         surface.configure(&device, &config);
+
+        // TODO: Zig also defines a buffer_pool, texture_pool, and render_pipeline_pool
+
 
         let clear_color = wgpu::Color {
             r: 0.03,
