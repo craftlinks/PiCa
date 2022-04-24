@@ -1,9 +1,9 @@
-use std::f32::consts::FRAC_PI_2;
+use std::f32::consts::{FRAC_PI_2, PI};
 
 use glam::{Mat4, Vec3};
 
 use crate::pica_window::Window;
-use crate::pica_window::{SPACE};
+use crate::pica_window::SPACE;
 
 pub const OPENGL_TO_WGPU_MATRIX: &[f32; 16] = &[
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
@@ -103,6 +103,24 @@ impl CameraController {
     }
 }
 
+impl Default for CameraController {
+    fn default() -> Self {
+        Self {
+            amount_left: 0.0,
+            amount_right: 0.0,
+            amount_forward: 0.0,
+            amount_backward: 0.0,
+            amount_up: 0.0,
+            amount_down: 0.0,
+            rotate_horizontal: 0.0,
+            rotate_vertical: 0.0,
+            scroll: 0.0,
+            speed: 0.1,
+            sensitivity: 0.001,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Camera {
     pub position: Vec3,
@@ -181,6 +199,17 @@ impl Camera {
             self.pitch = -SAFE_FRAC_PI_2.to_radians();
         } else if self.pitch > SAFE_FRAC_PI_2.to_radians() {
             self.pitch = SAFE_FRAC_PI_2.to_radians();
+        }
+    }
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
+            position: Vec3::new(0.0, 4.0, -4.0),
+            yaw: 0.0,
+            pitch: 0.15 * PI,
+            camera_controller: CameraController::default(),
         }
     }
 }

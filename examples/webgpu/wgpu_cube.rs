@@ -1,8 +1,9 @@
 use glam::{Mat4, Quat, Vec3};
 use pica::error::Error;
-use pica::math::{self, Vertex};
+use pica::math;
 use pica::pica_window::{Window, WindowAttributes};
 use pica::utils;
+use pica::wgpu_renderer::Vertex;
 use pica::wgpu_renderer::{camera::Camera, Instance, InstanceRaw, WGPURenderer};
 use std::borrow::Cow;
 

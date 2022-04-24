@@ -32,6 +32,12 @@ path = "examples/webgpu/wgpu_cube.rs"
 name = "wgpu-triangle"
 path = "examples/webgpu/wgpu_triangle.rs"
 
+[[example]]
+name = "wgpu-mesh"
+path = "examples/webgpu/wgpu_mesh.rs"
+
+
+
 [dependencies]
 raw-window-handle = "*"
 array-init = "*"

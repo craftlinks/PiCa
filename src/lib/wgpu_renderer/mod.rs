@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-
 use crate::pica_window::Window;
 use crate::utils;
 use crate::{math, wgpu_renderer::camera::Camera};
@@ -9,6 +8,12 @@ use wgpu::ShaderModule;
 use wgpu::{util::DeviceExt, IndexFormat, PrimitiveTopology, ShaderSource};
 
 pub mod camera;
+pub mod scene;
+
+// #[repr(C)]
+// #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+
+
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
