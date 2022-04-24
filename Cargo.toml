@@ -37,6 +37,9 @@ name = "wgpu-mesh"
 path = "examples/webgpu/wgpu_mesh.rs"
 
 
+[build-dependencies]
+cc = "*"
+
 
 [dependencies]
 raw-window-handle = "*"
