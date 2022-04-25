@@ -57,6 +57,7 @@ pub fn main() -> Result<(), Error> {
     surface.configure(&device, &config);
 
     // TODO: Zig also defines a buffer_pool, texture_pool, and render_pipeline_pool
+    // See C:\Users\CraftLinks\Repos\tmp\trait-test for easiest way to accomplish this in Rust
 
     while window.pull() {}
 
