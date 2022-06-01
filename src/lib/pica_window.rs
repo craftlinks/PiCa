@@ -323,7 +323,7 @@ impl Window {
             (1000 * 1000 * 1000 * self.time.delta_ticks) / self.time.ticks_per_second;
         self.time.delta_microseconds = self.time.delta_nanoseconds / 1000;
         self.time.delta_milliseconds = self.time.delta_microseconds / 1000;
-        self.time.seconds = self.time.delta_ticks as f32 / self.time.ticks_per_second as f32;
+        self.time.delta_seconds = self.time.delta_ticks as f32 / self.time.ticks_per_second as f32;
 
         self.time.nanoseconds = (1000 * 1000 * 1000 * self.time.ticks) / self.time.ticks_per_second;
         self.time.microseconds = self.time.nanoseconds / 1000;

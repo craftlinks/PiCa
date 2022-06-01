@@ -61,12 +61,13 @@ pub fn main() -> Result<(), Error> {
         
         if window.time.seconds - last_print_time > 1.0 {
             println!(
-                "Position: {:?}, Size: {:?}, Mouse: {:?}, delta_us: {:?}, ms: {:?}",
+                "Position: {:?}, Size: {:?}, Mouse: {:?}, delta_us: {:?}, ms: {:?}, tps: {:?}",
                 window.window_attributes.position,
                 window.window_attributes.size,
                 window.mouse.position,
                 window.time.delta_microseconds,
                 window.time.milliseconds,
+                window.time.ticks_per_second,
 
             );
             last_print_time = window.time.seconds;
